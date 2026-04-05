@@ -28,6 +28,7 @@ describe("APOD Module", () => {
         explanation:
           "The Great Orion Nebula is an immense, nearby star-forming region.",
         date: "2024-04-03",
+        media_type: "image",
         object_type: "Nebula",
       };
       (redisClient.get as any).mockResolvedValue(JSON.stringify(mockData));
@@ -49,6 +50,7 @@ describe("APOD Module", () => {
           url: "https://apod.nasa.gov/apod/image/2404/Andromeda_640.jpg",
           explanation: "The Andromeda Galaxy is a barred spiral galaxy...",
           date: "2024-04-03",
+          media_type: "image",
         },
       });
 
@@ -79,6 +81,7 @@ describe("APOD Module", () => {
             explanation:
               "The Pleiades or Seven Sisters is an open star cluster...",
             date: "2024-04-03",
+            media_type: "image",
           },
         ],
       });

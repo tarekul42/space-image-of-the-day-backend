@@ -9,6 +9,77 @@ const NASA_APOD_URL = "https://api.nasa.gov/planetary/apod";
 const CACHE_KEY_PREFIX = "apod:";
 
 /**
+ * Helper to translate, enrich, and store APOD data.
+ */
+const processAndStoreApod = async (
+  data: IApodData,
+  lang: string = "en",
+): Promise<IApodData> => {
+  const targetDate = data.date;
+  const targetLang = lang;
+  const cacheKey = `${CACHE_KEY_PREFIX}${targetLang}:${targetDate}`;
+
+  let processedData = { ...data };
+
+  if (targetLang !== "en") {
+    try {
+      logger.info(`🌎 Translating APOD to ${targetLang}`);
+      const [titleRes, expRes] = await Promise.all([
+        translate(data.title, { to: targetLang }),
+        translate(data.explanation, { to: targetLang }),
+      ]);
+      processedData = {
+        ...processedData,
+        title: titleRes.text,
+        explanation: expRes.text,
+      };
+    } catch (err) {
+      logger.error(
+        err instanceof Error ? err : { err },
+        "Translation failed, falling back to English",
+      );
+    }
+  }
+
+  // Enriched data simulation (matching the reference logic)
+  const isGalaxy = processedData.explanation.toLowerCase().includes("galaxy");
+  const isNebula = processedData.explanation.toLowerCase().includes("nebula");
+  const isCluster = processedData.explanation.toLowerCase().includes("cluster");
+
+  const enrichedData: IApodData = {
+    ...processedData,
+    object_type: isGalaxy
+      ? "Galaxy"
+      : isNebula
+        ? "Nebula"
+        : isCluster
+          ? "Star Cluster"
+          : "Celestial Object",
+    constellation: "Unknown Constellation",
+    more_info_url: `https://simbad.u-strasbg.fr/simbad/sim-basic?Ident=${encodeURIComponent(processedData.title)}`,
+  };
+
+  // Strip unnecessary NASA payload fields to optimize storage size
+  const minimalData: IApodData = {
+    date: enrichedData.date,
+    title: enrichedData.title,
+    explanation: enrichedData.explanation,
+    url: enrichedData.url,
+    hdurl: enrichedData.hdurl,
+    media_type: enrichedData.media_type,
+    service_version: enrichedData.service_version,
+    copyright: enrichedData.copyright,
+    object_type: enrichedData.object_type,
+    constellation: enrichedData.constellation,
+    more_info_url: enrichedData.more_info_url,
+  };
+
+  await StorageService.set(cacheKey, minimalData);
+
+  return enrichedData;
+};
+
+/**
  * Fetch Astronomical Picture of the Day.
  * Checks StorageService first (Redis -> MongoDB), then calls NASA API.
  */
@@ -38,60 +109,7 @@ const getApodByDate = async (
     },
   });
 
-  let data = response.data;
-
-  if (targetLang !== "en") {
-    try {
-      logger.info(`🌎 Translating APOD to ${targetLang}`);
-      const [titleRes, expRes] = await Promise.all([
-        translate(data.title, { to: targetLang }),
-        translate(data.explanation, { to: targetLang }),
-      ]);
-      data = { ...data, title: titleRes.text, explanation: expRes.text };
-    } catch (err) {
-      logger.error(
-        err instanceof Error ? err : { err },
-        "Translation failed, falling back to English",
-      );
-    }
-  }
-
-  // Enriched data simulation (matching the reference logic)
-  const isGalaxy = data.explanation.toLowerCase().includes("galaxy");
-  const isNebula = data.explanation.toLowerCase().includes("nebula");
-  const isCluster = data.explanation.toLowerCase().includes("cluster");
-
-  const enrichedData: IApodData = {
-    ...data,
-    object_type: isGalaxy
-      ? "Galaxy"
-      : isNebula
-        ? "Nebula"
-        : isCluster
-          ? "Star Cluster"
-          : "Celestial Object",
-    constellation: "Unknown Constellation",
-    more_info_url: `https://simbad.u-strasbg.fr/simbad/sim-basic?Ident=${encodeURIComponent(data.title)}`,
-  };
-
-  // Strip unnecessary NASA payload fields to optimize storage size
-  const minimalData: IApodData = {
-    date: enrichedData.date,
-    title: enrichedData.title,
-    explanation: enrichedData.explanation,
-    url: enrichedData.url,
-    hdurl: enrichedData.hdurl,
-    media_type: enrichedData.media_type,
-    service_version: enrichedData.service_version,
-    copyright: enrichedData.copyright,
-    object_type: enrichedData.object_type,
-    constellation: enrichedData.constellation,
-    more_info_url: enrichedData.more_info_url,
-  };
-
-  await StorageService.set(cacheKey, minimalData);
-
-  return { data: enrichedData, source: "api" };
+  return { data: await processAndStoreApod(response.data, targetLang), source: "api" };
 };
 
 const getRandomApod = async (
@@ -121,14 +139,15 @@ const getRandomApod = async (
 
       // We essentially "prime" the cache for these dates/langs
       for (const item of imageItems) {
-        // We use the same getApodByDate logic to enrich and cache
-        // but we don't await the others to avoid delaying the response.
-        getApodByDate(item.date, targetLang).catch(() => {});
+        // Use helper directly for background caching
+        processAndStoreApod(item, targetLang).catch(() => {});
       }
 
-      // Re-fetch the first one through the standard cached method
-      // to ensure consistency and enrichment.
-      return await getApodByDate(firstItem.date, targetLang);
+      // Return processed first item immediately - No second network fetch!
+      return {
+        data: await processAndStoreApod(firstItem, targetLang),
+        source: "api",
+      };
     }
 
     attempts++;
