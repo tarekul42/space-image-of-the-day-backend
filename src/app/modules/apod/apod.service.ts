@@ -1,9 +1,9 @@
 import axios from "axios";
+import translate from "google-translate-api-x";
 import { env } from "../../config/env.js";
+import { StorageService } from "../../services/storage.service.js";
 import logger from "../../utils/logger.js";
 import { IApodData } from "./apod.interface.js";
-import translate from "google-translate-api-x";
-import { StorageService } from "../../services/storage.service.js";
 
 const NASA_APOD_URL = "https://api.nasa.gov/planetary/apod";
 const CACHE_KEY_PREFIX = "apod:";
@@ -45,11 +45,14 @@ const getApodByDate = async (
       logger.info(`🌎 Translating APOD to ${targetLang}`);
       const [titleRes, expRes] = await Promise.all([
         translate(data.title, { to: targetLang }),
-        translate(data.explanation, { to: targetLang })
+        translate(data.explanation, { to: targetLang }),
       ]);
       data = { ...data, title: titleRes.text, explanation: expRes.text };
     } catch (err) {
-      logger.error(err instanceof Error ? err : { err }, "Translation failed, falling back to English");
+      logger.error(
+        err instanceof Error ? err : { err },
+        "Translation failed, falling back to English",
+      );
     }
   }
 
@@ -91,7 +94,9 @@ const getApodByDate = async (
   return { data: enrichedData, source: "api" };
 };
 
-const getRandomApod = async (lang: string = "en"): Promise<{ data: IApodData; source: "api" | "cache" }> => {
+const getRandomApod = async (
+  lang: string = "en",
+): Promise<{ data: IApodData; source: "api" | "cache" }> => {
   const targetLang = lang;
   logger.info("🎲 Fetching random APOD from NASA");
 
@@ -104,22 +109,24 @@ const getRandomApod = async (lang: string = "en"): Promise<{ data: IApodData; so
       },
     });
 
-    const items = Array.isArray(response.data) ? response.data : [response.data];
-    const imageItems = items.filter(item => item.media_type === "image");
+    const items = Array.isArray(response.data)
+      ? response.data
+      : [response.data];
+    const imageItems = items.filter((item) => item.media_type === "image");
 
     if (imageItems.length > 0) {
-      // Logic: Cache all retrieved images to Redis to reduce future latency, 
+      // Logic: Cache all retrieved images to Redis to reduce future latency,
       // but return the first one immediately.
       const firstItem = imageItems[0];
-      
+
       // We essentially "prime" the cache for these dates/langs
       for (const item of imageItems) {
         // We use the same getApodByDate logic to enrich and cache
         // but we don't await the others to avoid delaying the response.
-        getApodByDate(item.date, targetLang).catch(() => {}); 
+        getApodByDate(item.date, targetLang).catch(() => {});
       }
 
-      // Re-fetch the first one through the standard cached method 
+      // Re-fetch the first one through the standard cached method
       // to ensure consistency and enrichment.
       return await getApodByDate(firstItem.date, targetLang);
     }

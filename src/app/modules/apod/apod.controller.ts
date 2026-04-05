@@ -5,7 +5,10 @@ import { ApodService } from "./apod.service.js";
 const getApod = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { date, lang } = req.query;
-    const result = await ApodService.getApodByDate(date as string, lang as string);
+    const result = await ApodService.getApodByDate(
+      date as string,
+      lang as string,
+    );
     res.status(200).json({
       success: true,
       message: "Cosmic data retrieved successfully",

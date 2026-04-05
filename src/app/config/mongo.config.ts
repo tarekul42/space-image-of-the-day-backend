@@ -1,6 +1,6 @@
-import { MongoClient, Db } from "mongodb";
-import { env } from "./env.js";
+import { Db, MongoClient } from "mongodb";
 import logger from "../utils/logger.js";
+import { env } from "./env.js";
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
@@ -24,7 +24,10 @@ export const connectMongo = async (): Promise<Db | null> => {
     logger.info("📡 Connected to MongoDB - Premium storage activated.");
     return db;
   } catch (err) {
-    logger.error(err instanceof Error ? err : { err }, "❌ MongoDB connection failed");
+    logger.error(
+      err instanceof Error ? err : { err },
+      "❌ MongoDB connection failed",
+    );
     return null;
   }
 };

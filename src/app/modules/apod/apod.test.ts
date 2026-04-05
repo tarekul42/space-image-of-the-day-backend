@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import request from "supertest";
-import app from "../../../app.js";
 import axios from "axios";
+import request from "supertest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import app from "../../../app.js";
 import redisClient from "../../config/redis.config.js";
 
 vi.mock("axios");
@@ -25,7 +25,8 @@ describe("APOD Module", () => {
         title: "M42: The Orion Nebula",
         url: "https://apod.nasa.gov/apod/image/2404/Orion_Nebula_640.jpg",
         hdurl: "https://apod.nasa.gov/apod/image/2404/Orion_Nebula_HD.jpg",
-        explanation: "The Great Orion Nebula is an immense, nearby star-forming region.",
+        explanation:
+          "The Great Orion Nebula is an immense, nearby star-forming region.",
         date: "2024-04-03",
         object_type: "Nebula",
       };
@@ -75,7 +76,8 @@ describe("APOD Module", () => {
           {
             title: "Pleiades Star Cluster",
             url: "https://apod.nasa.gov/apod/image/2404/Pleiades_640.jpg",
-            explanation: "The Pleiades or Seven Sisters is an open star cluster...",
+            explanation:
+              "The Pleiades or Seven Sisters is an open star cluster...",
             date: "2024-04-03",
           },
         ],

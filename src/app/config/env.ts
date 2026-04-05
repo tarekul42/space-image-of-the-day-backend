@@ -6,7 +6,7 @@ dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).optional(),
-  PORT: z.string(),
+  PORT: z.string().optional(),
   NASA_API_KEY: z.string(),
   REDIS_URL: z.string(),
   MONGO_URI: z.string().optional(),

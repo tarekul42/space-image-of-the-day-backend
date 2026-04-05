@@ -1,6 +1,6 @@
 # 🛰️ Space Image of the Day — Backend API
 
-> *The story of building a production-grade API server that acts as a smart, resilient proxy between a Chrome extension and NASA's data — and why "just calling the API directly" was never an option.*
+> _The story of building a production-grade API server that acts as a smart, resilient proxy between a Chrome extension and NASA's data — and why "just calling the API directly" was never an option._
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun-black)](https://bun.sh)
 [![Framework](https://img.shields.io/badge/Framework-Express%20%2B%20TypeScript-blue)](https://expressjs.com)
@@ -19,7 +19,8 @@ This was the first real engineering decision of the project, and it shaped every
 The naïve approach: embed a NASA API key directly in the extension and call NASA from the browser. It works. For exactly one user, for exactly one day.
 
 The problems surface quickly:
-- **Rate limits**: NASA's free tier allows 1,000 requests/day *per API key*. Distributed across many users with their own keys, fine. But with a single shared key and no caching, even modest usage burns through it fast.
+
+- **Rate limits**: NASA's free tier allows 1,000 requests/day _per API key_. Distributed across many users with their own keys, fine. But with a single shared key and no caching, even modest usage burns through it fast.
 - **No caching layer**: The daily APOD image doesn't change for 24 hours. Without a cache, every single tab open for every user re-fetches the same unchanged data.
 - **Zero control over the data contract**: If NASA changes their API response shape, every installed extension breaks simultaneously with no way to patch it remotely.
 - **Security**: Shipping API keys in browser extension bundles is an antipattern. Keys get extracted, abused, and revoked.
@@ -90,7 +91,7 @@ while (attempts < 3) {
   const response = await axios.get(NASA_APOD_URL, { params: { count: 5 } });
   const items = Array.isArray(response.data) ? response.data : [response.data];
 
-  const imageItem = items.find(item => item.media_type === "image");
+  const imageItem = items.find((item) => item.media_type === "image");
   if (imageItem) return { data: imageItem, source: "api" };
 
   attempts++;
@@ -108,7 +109,7 @@ NASA writes every APOD description in English. Making translation happen in the 
 
 ```ts
 // apod.service.ts
-if (targetLang !== 'en') {
+if (targetLang !== "en") {
   const [titleRes, expRes] = await Promise.all([
     translate(data.title, { to: targetLang }),
     translate(data.explanation, { to: targetLang }),
@@ -120,6 +121,7 @@ if (targetLang !== 'en') {
 The `google-translate-api-x` package acts as a proxy to Google Translate's web API — no billing account needed. The translated response is cached in Redis under the language-scoped key, so the translation API is called at most once per language per day per image. **11 languages** are supported out of the box.
 
 The `lang` query parameter flows through the entire request chain:
+
 ```
 GET /api/v1/apod/random?lang=bn
 → translates to Bengali
@@ -135,8 +137,8 @@ Security and reliability weren't retrofitted — they were part of the initial s
 
 ```ts
 // app.ts
-app.use(helmet());                             // Security headers
-app.use(cors({ origin: allowedOrigins }));     // Strict origin control
+app.use(helmet()); // Security headers
+app.use(cors({ origin: allowedOrigins })); // Strict origin control
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 })); // 100 req/15min
 ```
 
@@ -168,11 +170,11 @@ Integration tests cover the full request lifecycle — routing, service logic, a
 
 ```ts
 // apod.test.ts
-describe('GET /api/v1/apod/random', () => {
-  it('should return a random image (not video)', async () => {
-    const res = await request(app).get('/api/v1/apod/random');
+describe("GET /api/v1/apod/random", () => {
+  it("should return a random image (not video)", async () => {
+    const res = await request(app).get("/api/v1/apod/random");
     expect(res.status).toBe(200);
-    expect(res.body.data.media_type).toBe('image');
+    expect(res.body.data.media_type).toBe("image");
   });
 });
 ```
@@ -183,18 +185,18 @@ A GitHub Actions CI pipeline (`/.github/workflows/ci.yml`) runs lint and tests o
 
 ## Technology Stack
 
-| Tool | Role | Why |
-|---|---|---|
-| **Bun** | Runtime | Significantly faster than Node.js for startup and execution |
-| **Express** | HTTP Framework | Battle-tested, minimal, full TypeScript support |
-| **TypeScript** | Language | Strict typing prevents entire classes of runtime bugs |
-| **Redis** | Cache | Sub-millisecond reads; perfect for time-bound API responses |
-| **Zod** | Validation | Type-safe env config and request schema validation |
-| **Pino** | Logging | Structured JSON logs, production-ready out of the box |
-| **Helmet** | Security | Automatic HTTP security headers |
-| **express-rate-limit** | Security | Abuse prevention |
-| **Vitest + Supertest** | Testing | Integration-level test coverage |
-| **GitHub Actions** | CI/CD | Automated lint + test on every push |
+| Tool                   | Role           | Why                                                         |
+| ---------------------- | -------------- | ----------------------------------------------------------- |
+| **Bun**                | Runtime        | Significantly faster than Node.js for startup and execution |
+| **Express**            | HTTP Framework | Battle-tested, minimal, full TypeScript support             |
+| **TypeScript**         | Language       | Strict typing prevents entire classes of runtime bugs       |
+| **Redis**              | Cache          | Sub-millisecond reads; perfect for time-bound API responses |
+| **Zod**                | Validation     | Type-safe env config and request schema validation          |
+| **Pino**               | Logging        | Structured JSON logs, production-ready out of the box       |
+| **Helmet**             | Security       | Automatic HTTP security headers                             |
+| **express-rate-limit** | Security       | Abuse prevention                                            |
+| **Vitest + Supertest** | Testing        | Integration-level test coverage                             |
+| **GitHub Actions**     | CI/CD          | Automated lint + test on every push                         |
 
 ---
 
@@ -218,14 +220,14 @@ bun run dev
 
 ### API Endpoints
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/v1/apod` | Today's APOD (English) |
-| `GET` | `/api/v1/apod?date=YYYY-MM-DD` | APOD for a specific date |
-| `GET` | `/api/v1/apod?lang=es` | Today's APOD translated to Spanish |
-| `GET` | `/api/v1/apod/random` | Random image APOD (videos filtered out, English) |
-| `GET` | `/api/v1/apod/random?lang=bn` | Random APOD translated to Bengali |
-| `GET` | `/health` | Server health check |
+| Method | Endpoint                       | Description                                      |
+| ------ | ------------------------------ | ------------------------------------------------ |
+| `GET`  | `/api/v1/apod`                 | Today's APOD (English)                           |
+| `GET`  | `/api/v1/apod?date=YYYY-MM-DD` | APOD for a specific date                         |
+| `GET`  | `/api/v1/apod?lang=es`         | Today's APOD translated to Spanish               |
+| `GET`  | `/api/v1/apod/random`          | Random image APOD (videos filtered out, English) |
+| `GET`  | `/api/v1/apod/random?lang=bn`  | Random APOD translated to Bengali                |
+| `GET`  | `/health`                      | Server health check                              |
 
 ### Example Response
 
@@ -251,6 +253,7 @@ bun run dev
 ## Roadmap
 
 ### v1 — Shipped ✅
+
 - [x] Modular domain-driven architecture
 - [x] Redis caching (24hr TTL, scoped by language + date)
 - [x] Random endpoint with video filtering
@@ -264,6 +267,7 @@ bun run dev
 - [x] Multi-lingual translations (11 languages, `google-translate-api-x`)
 
 ### v2 — Planned 🚀
+
 - [ ] SIMBAD coordinate lookup endpoint (RA/Dec for star map)
 - [ ] Persistent per-user translation preferences
 - [ ] Rate-limit translation calls to avoid proxy throttling
