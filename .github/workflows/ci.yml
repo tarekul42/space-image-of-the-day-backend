@@ -21,15 +21,8 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Load .env file
-        run: |
-          if [ -f .env ]; then
-            while read -r line || [[ -n "$line" ]]; do
-              if [[ ! "$line" =~ ^# && "$line" =~ = ]]; then
-                echo "$line" >> $GITHUB_ENV
-              fi
-            done < .env
-          fi
+      - name: Create .env file from secrets
+        run: echo "${{ secrets.ENV_FILE }}" > .env
 
       - name: Run Lint
         run: bun run lint
