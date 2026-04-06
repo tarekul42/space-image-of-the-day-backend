@@ -109,7 +109,10 @@ const getApodByDate = async (
     },
   });
 
-  return { data: await processAndStoreApod(response.data, targetLang), source: "api" };
+  return {
+    data: await processAndStoreApod(response.data, targetLang),
+    source: "api",
+  };
 };
 
 const getRandomApod = async (
