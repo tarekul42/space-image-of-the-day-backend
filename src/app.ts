@@ -10,13 +10,29 @@ import logger from "./app/utils/logger.js";
 
 const app: Application = express();
 
+const allowedOrigins: string[] = [
+  "https://space-image-of-the-day.example.com",
+  "http://localhost:3000",
+];
+
 /**
  * Standard Security & Performance Middlewares
  */
 app.use(helmet());
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      if (!origin) {
+        // Allow non-browser or same-origin requests
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
