@@ -30,7 +30,7 @@ export const StorageService = {
           // Back-fill Redis for next fast hit
           redisClient
             .set(key, JSON.stringify(item), { EX: 86400 })
-            .catch(() => {});
+            .catch(() => { });
           return item;
         }
       }

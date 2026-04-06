@@ -143,7 +143,7 @@ const getRandomApod = async (
       // We essentially "prime" the cache for these dates/langs
       for (const item of imageItems) {
         // Use helper directly for background caching
-        processAndStoreApod(item, targetLang).catch(() => {});
+        processAndStoreApod(item, targetLang).catch(() => { });
       }
 
       // Return processed first item immediately - No second network fetch!
