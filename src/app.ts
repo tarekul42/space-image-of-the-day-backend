@@ -1,19 +1,15 @@
 import compression from "compression";
 import cors from "cors";
 import express, { Application, NextFunction, Request, Response } from "express";
-import extromBundle from "express-prom-bundle";
+import promBundle from "express-prom-bundle";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { z } from "zod";
-import router from "./app/route/index.js";
-import logger from "./app/utils/logger.js";
+import { env } from "./app/config/env";
+import router from "./app/route/index";
+import logger from "./app/utils/logger";
 
 const app: Application = express();
-
-const allowedOrigins: string[] = [
-  "https://space-image-of-the-day.example.com",
-  "http://localhost:3000",
-];
 
 /**
  * Standard Security & Performance Middlewares
@@ -22,15 +18,11 @@ app.use(helmet());
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) {
-        // Allow non-browser or same-origin requests
+      const allowedOrigins = env.ALLOWED_ORIGINS?.split(",") || [];
+      // Allow non-browser (e.g., Postman) or same-origin requests
+      if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
       return callback(null, false);
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -43,18 +35,19 @@ app.use(express.urlencoded({ extended: true }));
 /**
  * Performance & Metrics Middlewares
  */
-app.use(compression()); // Compress all responses
-const metricsMiddleware = extromBundle({
+app.use(compression());
+const metricsMiddleware = promBundle({
   includeMethod: true,
   includePath: true,
   promClient: {
     collectDefaultMetrics: {},
   },
 });
-app.use(metricsMiddleware); // Exposes /metrics
+app.use(metricsMiddleware);
 
+// Simplified Request Logging
 app.use((req: Request, _res: Response, next: NextFunction) => {
-  logger.info(`✨ Incoming signal on [${req.method}] ${req.path}`);
+  logger.info({ method: req.method, path: req.path }, "✨ Incoming signal");
   next();
 });
 
@@ -62,11 +55,14 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
  * Rate Limiting
  */
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: "🌌 Too many signals from this sector. Please wait.",
+  message: {
+    success: false,
+    message: "🌌 Too many signals from this sector. Please wait.",
+  },
 });
 app.use("/api", limiter);
 
@@ -76,10 +72,10 @@ app.use("/api", limiter);
 app.use("/api/v1", router);
 
 /**
- * Root Route
+ * Root & Health Check
  */
-app.get("/", (req: Request, res: Response) => {
-  res.status(200).json({
+app.get("/", (_req: Request, res: Response) => {
+  res.json({
     success: true,
     message: "🌌 Welcome to the Space Image of the Day API!",
     version: "1.0.0",
@@ -90,11 +86,8 @@ app.get("/", (req: Request, res: Response) => {
   });
 });
 
-/**
- * Health Check
- */
-app.get("/health", (req: Request, res: Response) => {
-  res.status(200).json({
+app.get("/health", (_req: Request, res: Response) => {
+  res.json({
     status: "UP",
     timestamp: new Date().toISOString(),
     service: "Space Image of the Day API",
@@ -104,7 +97,7 @@ app.get("/health", (req: Request, res: Response) => {
 /**
  * 404 Not Found Handling
  */
-app.use((req: Request, res: Response) => {
+app.use((_req: Request, res: Response) => {
   res.status(404).json({
     success: false,
     message: "🚀 Path not found in this galaxy.",
@@ -114,28 +107,33 @@ app.use((req: Request, res: Response) => {
 /**
  * Global Error Handler
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-  let statusCode = err.status || 500;
-  let message = err.message || "Internal Starship Error";
+app.use(
+  (
+    err: Error & { status?: number; statusCode?: number },
+    req: Request,
+    res: Response,
+    _next: NextFunction,
+  ) => {
+    const statusCode = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Starship Error";
 
-  if (err instanceof z.ZodError) {
-    statusCode = 400;
-    message = "⚠️ Galactic Navigation Error: Invalid request data.";
-    return res.status(statusCode).json({
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "⚠️ Galactic Navigation Error: Invalid request data.",
+        issues: err.issues,
+      });
+    }
+
+    // Use pino to log the full error object
+    logger.error({ err, path: req.path }, message);
+
+    res.status(statusCode).json({
       success: false,
       message,
-      issues: err.issues,
+      stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
     });
-  }
-
-  logger.error(err as Error, `Error: ${message}`);
-
-  res.status(statusCode).json({
-    success: false,
-    message: message,
-    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
-  });
-});
+  },
+);
 
 export default app;

@@ -1,34 +1,61 @@
-import { Db, MongoClient } from "mongodb";
-import logger from "../utils/logger.js";
-import { env } from "./env.js";
+import { Db, MongoClient, ServerApiVersion } from "mongodb";
+import logger from "../utils/logger";
+import { env } from "./env";
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
+const MONGO_OPTIONS = {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
+  connectTimeoutMS: 10000,
+  socketTimeoutMS: 45000,
+};
+
 /**
  * Initialize MongoDB connection.
- * If MONGO_URI is not provided, this will simply return null.
+ * If MONGO_URI is not provided, this returns null and stays in "Cache-Only" mode.
  */
 export const connectMongo = async (): Promise<Db | null> => {
   if (!env.MONGO_URI) {
-    logger.warn("⚠️ MONGO_URI missing, database storage will be unavailable.");
+    logger.warn(
+      "⚠️ MONGO_URI missing. Persistent storage (MongoDB) is DISABLED.",
+    );
     return null;
   }
 
   if (db) return db;
 
   try {
-    client = new MongoClient(env.MONGO_URI);
+    client = new MongoClient(env.MONGO_URI, MONGO_OPTIONS);
     await client.connect();
+
+    // Select the DB (using "space-images" as default)
     db = client.db("space-images");
-    logger.info("📡 Connected to MongoDB - Premium storage activated.");
+
+    // Quick Ping to verify connection
+    await db.command({ ping: 1 });
+
+    logger.info("📡 MongoDB: Connection established (Premium storage active)");
     return db;
   } catch (err) {
-    logger.error(
-      err instanceof Error ? err : { err },
-      "❌ MongoDB connection failed",
-    );
+    logger.error({ err }, "❌ MongoDB: Connection failed");
     return null;
+  }
+};
+
+/**
+ * Gracefully close the MongoDB connection
+ */
+export const closeMongo = async () => {
+  if (client) {
+    await client.close();
+    logger.info("🔌 MongoDB: Connection closed");
+    client = null;
+    db = null;
   }
 };
 

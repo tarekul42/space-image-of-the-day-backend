@@ -1,9 +1,9 @@
-import { Router } from "express";
-import validateRequest from "../../middlewares/validateRequest.js";
-import { ApodController } from "./apod.controller.js";
-import { ApodValidation } from "./apod.validation.js";
+import express from "express";
+import validateRequest from "../../middlewares/validateRequest";
+import { ApodController } from "./apod.controller";
+import { ApodValidation } from "./apod.validation";
 
-const router = Router();
+const router = express.Router();
 
 router.get(
   "/",

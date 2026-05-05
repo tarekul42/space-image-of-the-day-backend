@@ -1,82 +1,53 @@
 import { Server } from "http";
-import app from "./app.js";
-import { env } from "./app/config/env.js";
-import redisClient from "./app/config/redis.config.js";
-import { StorageService } from "./app/services/storage.service.js";
-import logger from "./app/utils/logger.js";
+import app from "./app";
+import { env } from "./app/config/env";
+import { StorageService } from "./app/services/storage.service";
+import logger from "./app/utils/logger";
 
 let server: Server;
 
 async function bootstrap() {
   try {
-    // 1. Connect to Redis (fast cache)
-    await redisClient.connect();
-    logger.info("✅ Initialized Redis connection");
-
-    // 2. Connect to Database (robust persistence)
+    // Unify all storage initialization (Redis + Mongo)
     await StorageService.init();
 
-    // 3. Start Server (Only if NOT on Vercel)
     if (!process.env.VERCEL) {
       server = app.listen(env.PORT || 5000, () => {
-        logger.info(
-          `🚀 [SERVER] Application is running on port ${env.PORT || 5000}`,
-        );
-        logger.info(`🌍 Environment: ${env.NODE_ENV}`);
+        logger.info({ port: env.PORT || 5000, env: env.NODE_ENV }, "🚀 [SERVER] Application running");
       });
     }
   } catch (err) {
-    logger.error(
-      err instanceof Error ? err : { err },
-      "❌ Failed to bootstrap the server",
-    );
+    logger.error({ err }, "❌ Failed to bootstrap the server");
     process.exit(1);
   }
-
-  const exitHandler = () => {
-    if (server) {
-      server.close(() => {
-        logger.info("⚠️ Server closed");
-      });
-    }
-    process.exit(1);
-  };
-
-  const unexpectedErrorHandler = (error: unknown) => {
-    logger.error(
-      error instanceof Error ? error : { error },
-      "💥 Unexpected Error",
-    );
-    exitHandler();
-  };
-
-  process.on("uncaughtException", unexpectedErrorHandler);
-  process.on("unhandledRejection", unexpectedErrorHandler);
-
-  process.on("SIGTERM", () => {
-    logger.info("🛑 SIGTERM received");
-    if (server) {
-      server.close();
-    }
-  });
 }
 
-// For local execution
+// Global process handlers
+const exitHandler = () => {
+  if (server) server.close(() => logger.info("⚠️ Server closed"));
+  process.exit(1);
+};
+
+process.on("uncaughtException", (err) => {
+  logger.error({ err }, "💥 Uncaught Exception");
+  exitHandler();
+});
+process.on("unhandledRejection", (err) => {
+  logger.error({ err }, "💥 Unhandled Rejection");
+  exitHandler();
+});
+process.on("SIGTERM", () => server?.close(() => logger.info("🛑 SIGTERM received")));
+
+// Start for local, or use middleware for Vercel
 if (!process.env.VERCEL) {
   bootstrap();
 }
 
-// For Vercel: Middleware to ensure DB/Redis are connected before any request
 app.use(async (_req, _res, next) => {
   try {
-    if (!redisClient.isOpen) {
-      await redisClient.connect();
-    }
-    // StorageService already has internal check to avoid re-init
     await StorageService.init();
     next();
   } catch (err) {
-    logger.error(err, "Failed to initialize connections in middleware");
     next(err);
   }
 });

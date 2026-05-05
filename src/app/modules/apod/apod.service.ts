@@ -1,12 +1,19 @@
 import axios from "axios";
 import translate from "google-translate-api-x";
-import { env } from "../../config/env.js";
-import { StorageService } from "../../services/storage.service.js";
-import logger from "../../utils/logger.js";
-import { IApodData } from "./apod.interface.js";
+import { env } from "../../config/env";
+import { StorageService } from "../../services/storage.service";
+import logger from "../../utils/logger";
+import { IApodData } from "./apod.interface";
 
-const NASA_APOD_URL = "https://api.nasa.gov/planetary/apod";
 const CACHE_KEY_PREFIX = "apod:";
+
+/**
+ * Standardize defaults for date and language.
+ */
+const getDefaults = (date?: string, lang?: string) => ({
+  targetDate: date || new Date().toISOString().split("T")[0],
+  targetLang: lang || "en",
+});
 
 /**
  * Helper to translate, enrich, and store APOD data.
@@ -15,15 +22,14 @@ const processAndStoreApod = async (
   data: IApodData,
   lang: string = "en",
 ): Promise<IApodData> => {
-  const targetDate = data.date;
-  const targetLang = lang;
+  const { targetDate, targetLang } = getDefaults(data.date, lang);
   const cacheKey = `${CACHE_KEY_PREFIX}${targetLang}:${targetDate}`;
 
   let processedData = { ...data };
 
   if (targetLang !== "en") {
     try {
-      logger.info(`🌎 Translating APOD to ${targetLang}`);
+      logger.info({ lang: targetLang }, "🌎 Translating APOD");
       const [titleRes, expRes] = await Promise.all([
         translate(data.title, { to: targetLang }),
         translate(data.explanation, { to: targetLang }),
@@ -34,45 +40,30 @@ const processAndStoreApod = async (
         explanation: expRes.text,
       };
     } catch (err) {
-      logger.error(
-        err instanceof Error ? err : { err },
-        "Translation failed, falling back to English",
-      );
+      logger.error({ err }, "Translation failed, falling back to English");
     }
   }
 
-  // Enriched data simulation (matching the reference logic)
-  const isGalaxy = processedData.explanation.toLowerCase().includes("galaxy");
-  const isNebula = processedData.explanation.toLowerCase().includes("nebula");
-  const isCluster = processedData.explanation.toLowerCase().includes("cluster");
+  // Enriched data simulation
+  const exp = processedData.explanation.toLowerCase();
+  const objectType = exp.includes("galaxy")
+    ? "Galaxy"
+    : exp.includes("nebula")
+      ? "Nebula"
+      : exp.includes("cluster")
+        ? "Star Cluster"
+        : "Celestial Object";
 
   const enrichedData: IApodData = {
     ...processedData,
-    object_type: isGalaxy
-      ? "Galaxy"
-      : isNebula
-        ? "Nebula"
-        : isCluster
-          ? "Star Cluster"
-          : "Celestial Object",
+    object_type: objectType,
     constellation: "Unknown Constellation",
-    more_info_url: `https://simbad.u-strasbg.fr/simbad/sim-basic?Ident=${encodeURIComponent(processedData.title)}`,
+    more_info_url: `${env.SIMBAD_BASE_URL}?Ident=${encodeURIComponent(processedData.title)}`,
   };
 
   // Strip unnecessary NASA payload fields to optimize storage size
-  const minimalData: IApodData = {
-    date: enrichedData.date,
-    title: enrichedData.title,
-    explanation: enrichedData.explanation,
-    url: enrichedData.url,
-    hdurl: enrichedData.hdurl,
-    media_type: enrichedData.media_type,
-    service_version: enrichedData.service_version,
-    copyright: enrichedData.copyright,
-    object_type: enrichedData.object_type,
-    constellation: enrichedData.constellation,
-    more_info_url: enrichedData.more_info_url,
-  };
+  const { date, title, explanation, url, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url } = enrichedData;
+  const minimalData: IApodData = { date, title, explanation, url, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url };
 
   await StorageService.set(cacheKey, minimalData);
 
@@ -87,26 +78,18 @@ const getApodByDate = async (
   date?: string,
   lang?: string,
 ): Promise<{ data: IApodData; source: "cache" | "api" }> => {
-  const targetDate = date || new Date().toISOString().split("T")[0];
-  const targetLang = lang || "en";
+  const { targetDate, targetLang } = getDefaults(date, lang);
   const cacheKey = `${CACHE_KEY_PREFIX}${targetLang}:${targetDate}`;
 
-  try {
-    const cachedData = await StorageService.get(cacheKey);
-    if (cachedData) {
-      logger.info(`🎯 Cache Hit for APOD: ${targetDate} (${targetLang})`);
-      return { data: cachedData, source: "cache" };
-    }
-  } catch (err) {
-    logger.error(err instanceof Error ? err : { err }, "Storage fetch error");
+  const cachedData = await StorageService.get(cacheKey);
+  if (cachedData) {
+    logger.info({ date: targetDate, lang: targetLang }, "🎯 Cache Hit for APOD");
+    return { data: cachedData, source: "cache" };
   }
 
-  logger.info(`🌐 Fetching APOD from NASA for: ${targetDate}`);
-  const response = await axios.get<IApodData>(NASA_APOD_URL, {
-    params: {
-      api_key: env.NASA_API_KEY,
-      date: targetDate,
-    },
+  logger.info({ date: targetDate }, "🌐 Fetching APOD from NASA");
+  const response = await axios.get<IApodData>(env.NASA_API_URL, {
+    params: { api_key: env.NASA_API_KEY, date: targetDate },
   });
 
   return {
@@ -118,42 +101,25 @@ const getApodByDate = async (
 const getRandomApod = async (
   lang: string = "en",
 ): Promise<{ data: IApodData; source: "api" | "cache" }> => {
-  const targetLang = lang;
   logger.info("🎲 Fetching random APOD from NASA");
 
-  let attempts = 0;
-  while (attempts < 3) {
-    const response = await axios.get<IApodData | IApodData[]>(NASA_APOD_URL, {
-      params: {
-        api_key: env.NASA_API_KEY,
-        count: 5,
-      },
+  for (let i = 0; i < 3; i++) {
+    const response = await axios.get<IApodData | IApodData[]>(env.NASA_API_URL, {
+      params: { api_key: env.NASA_API_KEY, count: 5 },
     });
 
-    const items = Array.isArray(response.data)
-      ? response.data
-      : [response.data];
-    const imageItems = items.filter((item) => item.media_type === "image");
+    const imageItems = (Array.isArray(response.data) ? response.data : [response.data])
+      .filter((item) => item.media_type === "image");
 
     if (imageItems.length > 0) {
-      // Logic: Cache all retrieved images to Redis to reduce future latency,
-      // but return the first one immediately.
-      const firstItem = imageItems[0];
+      // Background priming
+      imageItems.forEach(item => processAndStoreApod(item, lang).catch(() => {}));
 
-      // We essentially "prime" the cache for these dates/langs
-      for (const item of imageItems) {
-        // Use helper directly for background caching
-        processAndStoreApod(item, targetLang).catch(() => { });
-      }
-
-      // Return processed first item immediately - No second network fetch!
       return {
-        data: await processAndStoreApod(firstItem, targetLang),
+        data: await processAndStoreApod(imageItems[0], lang),
         source: "api",
       };
     }
-
-    attempts++;
     logger.warn("No image found in random APOD fetch, retrying...");
   }
 

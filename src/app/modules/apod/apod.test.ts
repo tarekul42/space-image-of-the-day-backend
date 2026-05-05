@@ -1,11 +1,11 @@
 import axios from "axios";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import app from "../../../app.js";
-import redisClient from "../../config/redis.config.js";
+import app from "../../../app";
+import redisClient from "../../config/redis.config";
 
 vi.mock("axios");
-vi.mock("../../config/redis.config.js", () => ({
+vi.mock("../../config/redis.config", () => ({
   default: {
     get: vi.fn(),
     set: vi.fn(),
@@ -13,6 +13,8 @@ vi.mock("../../config/redis.config.js", () => ({
     on: vi.fn(),
   },
 }));
+
+const mockedAxios = vi.mocked(axios);
 
 describe("APOD Module", () => {
   beforeEach(() => {
@@ -31,7 +33,7 @@ describe("APOD Module", () => {
         media_type: "image",
         object_type: "Nebula",
       };
-      (redisClient.get as any).mockResolvedValue(JSON.stringify(mockData));
+      vi.mocked(redisClient.get).mockResolvedValue(JSON.stringify(mockData));
 
       const response = await request(app).get("/api/v1/apod");
 
@@ -39,12 +41,12 @@ describe("APOD Module", () => {
       expect(response.body.success).toBe(true);
       expect(response.body.source).toBe("cache");
       expect(response.body.data.title).toBe("M42: The Orion Nebula");
-      expect(axios.get).not.toHaveBeenCalled();
+      expect(mockedAxios.get).not.toHaveBeenCalled();
     });
 
     it("should return APOD data from API if not in cache", async () => {
-      (redisClient.get as any).mockResolvedValue(null);
-      (axios.get as any).mockResolvedValue({
+      vi.mocked(redisClient.get).mockResolvedValue(null);
+      mockedAxios.get.mockResolvedValue({
         data: {
           title: "Andromeda Galaxy",
           url: "https://apod.nasa.gov/apod/image/2404/Andromeda_640.jpg",
@@ -60,7 +62,7 @@ describe("APOD Module", () => {
       expect(response.body.success).toBe(true);
       expect(response.body.source).toBe("api");
       expect(response.body.data.object_type).toBe("Galaxy");
-      expect(axios.get).toHaveBeenCalled();
+      expect(mockedAxios.get).toHaveBeenCalled();
     });
 
     it("should return 400 for invalid date format", async () => {
@@ -73,7 +75,7 @@ describe("APOD Module", () => {
 
   describe("GET /api/v1/apod/random", () => {
     it("should return a random APOD", async () => {
-      (axios.get as any).mockResolvedValue({
+      mockedAxios.get.mockResolvedValue({
         data: [
           {
             title: "Pleiades Star Cluster",

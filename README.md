@@ -7,6 +7,7 @@
 [![Storage: Fast](https://img.shields.io/badge/Cache-Redis-red)](https://redis.io)
 [![Storage: Persistent](https://img.shields.io/badge/Database-MongoDB-green)](https://mongodb.com)
 [![Build](https://img.shields.io/badge/Build-Passing-brightgreen)](https://github.com/tarekul42)
+[![CodeQL](https://github.com/tarekul42/space-image-of-the-day-backend/actions/workflows/codeql.yml/badge.svg)](https://github.com/tarekul42/space-image-of-the-day-backend/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/badge/License-MIT-green)](https://github.com/tarekul42)
 
 > **Part of:** [Space Image of the Day Chrome Extension](https://github.com/tarekul42) — see the frontend repo for the full product story.
@@ -48,7 +49,7 @@ src/
 │   ├── utils/           # Shared utilities (Pino Logger)
 │   └── route/           # Router aggregation
 ├── app.ts               # Express configuration
-└── server.ts            # Entry point & DB initialization
+└── server.ts            # Entry point & unified bootstrap
 ```
 
 ---
@@ -79,6 +80,7 @@ We don't just return NASA's raw text. Our service:
 - **Standard-Sec**: Helmet for headers, CORS for origin control.
 - **Gzip Compression**: Every byte counts when serving JSON globally.
 - **Pino Structured Logging**: Machine-readable logs for easier debugging.
+- **CodeQL & CI**: Automated security scanning and CI/CD via GitHub Actions.
 - **Prometheus Metrics**: Exposes an `/metrics` endpoint for real-time monitoring (Grafana-ready).
 
 ---

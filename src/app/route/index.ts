@@ -1,7 +1,7 @@
-import { Router } from "express";
-import { ApodRoutes } from "../modules/apod/apod.route.js";
+import express from "express";
+import { ApodRoutes } from "../modules/apod/apod.route";
 
-const router = Router();
+const router = express.Router();
 
 const moduleRoutes = [
   {

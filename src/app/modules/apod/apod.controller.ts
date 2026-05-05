@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
-import logger from "../../utils/logger.js";
-import { ApodService } from "./apod.service.js";
+import logger from "../../utils/logger";
+import { sendResponse } from "../../utils/response";
+import { ApodService } from "./apod.service";
 
 const getApod = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -9,16 +10,14 @@ const getApod = async (req: Request, res: Response, next: NextFunction) => {
       date as string,
       lang as string,
     );
-    res.status(200).json({
+    sendResponse(res, {
+      statusCode: 200,
       success: true,
       message: "Cosmic data retrieved successfully",
       ...result,
     });
   } catch (error) {
-    logger.error(
-      error instanceof Error ? error : { error },
-      "Error fetching APOD:",
-    );
+    logger.error({ err: error }, "Error fetching APOD");
     next(error);
   }
 };
@@ -31,16 +30,14 @@ const getRandomApod = async (
   try {
     const { lang } = req.query;
     const result = await ApodService.getRandomApod(lang as string);
-    res.status(200).json({
+    sendResponse(res, {
+      statusCode: 200,
       success: true,
       message: "Random discovery successful",
       ...result,
     });
   } catch (error) {
-    logger.error(
-      error instanceof Error ? error : { error },
-      "Error fetching random APOD:",
-    );
+    logger.error({ err: error }, "Error fetching random APOD");
     next(error);
   }
 };
