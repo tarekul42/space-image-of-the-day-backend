@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "lib": ["ESNext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -13,12 +13,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "incremental": true,
-    "types": ["bun-types", "node"],
-    "baseUrl": ".",
+    "types": ["bun-types"],
     "paths": {
-      "@/*": ["src/*"]
-    }
+      "@/*": ["./src/*"],
+    },
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
 }
