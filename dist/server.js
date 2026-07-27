@@ -114919,7 +114919,8 @@ var getApodByDate = async (date5, lang) => {
   }
   logger_default.info({ date: targetDate }, "\uD83C\uDF10 Fetching APOD from NASA");
   const response = await axios_default.get(env.NASA_API_URL, {
-    params: { api_key: env.NASA_API_KEY, date: targetDate }
+    params: { api_key: env.NASA_API_KEY, date: targetDate },
+    timeout: 1e4
   });
   return {
     data: await processAndStoreApod(response.data, targetLang),
@@ -114930,7 +114931,8 @@ var getRandomApod = async (lang = "en") => {
   logger_default.info("\uD83C\uDFB2 Fetching random APOD from NASA");
   for (let i = 0;i < 3; i++) {
     const response = await axios_default.get(env.NASA_API_URL, {
-      params: { api_key: env.NASA_API_KEY, count: 5 }
+      params: { api_key: env.NASA_API_KEY, count: 5 },
+      timeout: 1e4
     });
     const imageItems = (Array.isArray(response.data) ? response.data : [response.data]).filter((item) => item.media_type === "image");
     if (imageItems.length > 0) {
@@ -114947,7 +114949,8 @@ var getRandomApod = async (lang = "en") => {
 var getApodRange = async (start_date, end_date, lang = "en") => {
   logger_default.info({ start_date, end_date }, "\uD83D\uDCC5 Fetching APOD range from NASA");
   const response = await axios_default.get(env.NASA_API_URL, {
-    params: { api_key: env.NASA_API_KEY, start_date, end_date }
+    params: { api_key: env.NASA_API_KEY, start_date, end_date },
+    timeout: 1e4
   });
   const items = (Array.isArray(response.data) ? response.data : [response.data]).filter((item) => item.media_type === "image");
   const processed = await Promise.all(items.map(async (item) => {

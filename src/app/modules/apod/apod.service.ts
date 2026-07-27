@@ -90,6 +90,7 @@ const getApodByDate = async (
   logger.info({ date: targetDate }, "🌐 Fetching APOD from NASA");
   const response = await axios.get<IApodData>(env.NASA_API_URL, {
     params: { api_key: env.NASA_API_KEY, date: targetDate },
+    timeout: 10_000,
   });
 
   return {
@@ -106,6 +107,7 @@ const getRandomApod = async (
   for (let i = 0; i < 3; i++) {
     const response = await axios.get<IApodData | IApodData[]>(env.NASA_API_URL, {
       params: { api_key: env.NASA_API_KEY, count: 5 },
+      timeout: 10_000,
     });
 
     const imageItems = (Array.isArray(response.data) ? response.data : [response.data])
@@ -134,6 +136,7 @@ const getApodRange = async (
   logger.info({ start_date, end_date }, "📅 Fetching APOD range from NASA");
   const response = await axios.get<IApodData[]>(env.NASA_API_URL, {
     params: { api_key: env.NASA_API_KEY, start_date, end_date },
+    timeout: 10_000,
   });
 
   const items = (Array.isArray(response.data) ? response.data : [response.data])
