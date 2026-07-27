@@ -17,3 +17,8 @@ export interface IApodResponse {
   data: IApodData;
   source: "api" | "cache";
 }
+
+export interface IApodRangeResponse {
+  data: IApodData[];
+  source: "api" | "cache";
+}

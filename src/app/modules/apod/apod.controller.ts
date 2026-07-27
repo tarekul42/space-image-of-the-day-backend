@@ -42,7 +42,32 @@ const getRandomApod = async (
   }
 };
 
+const getApodRange = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { start_date, end_date, lang } = req.query;
+    const result = await ApodService.getApodRange(
+      start_date as string,
+      end_date as string,
+      lang as string,
+    );
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: "Weekly cosmic data retrieved successfully",
+      ...result,
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Error fetching APOD range");
+    next(error);
+  }
+};
+
 export const ApodController = {
   getApod,
   getRandomApod,
+  getApodRange,
 };

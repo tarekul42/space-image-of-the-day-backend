@@ -14277,7 +14277,7 @@ var require_dbcs_codec = __commonJS((exports) => {
           if (resCode !== undefined) {
             dbcsCode = resCode;
             nextChar = uCode;
-          } else {}
+          }
         }
         seqObj = undefined;
       } else if (uCode >= 0) {
@@ -14342,7 +14342,7 @@ var require_dbcs_codec = __commonJS((exports) => {
           newBuf[j++] = dbcsCode >> 8;
           newBuf[j++] = dbcsCode & 255;
         }
-      } else {}
+      }
       this.seqObj = undefined;
     }
     if (this.leadSurrogate !== -1) {
@@ -27861,7 +27861,7 @@ var require_tracestate_impl = __commonJS((exports) => {
           const value = listMember.slice(i + 1, part.length);
           if ((0, tracestate_validators_1.validateKey)(key) && (0, tracestate_validators_1.validateValue)(value)) {
             agg.set(key, value);
-          } else {}
+          }
         }
         return agg;
       }, new Map);
@@ -30602,6 +30602,325 @@ var require_ip_address = __commonJS((exports) => {
   exports.v6 = { helpers };
 });
 
+// node_modules/dotenv/lib/main.js
+var require_main = __commonJS((exports, module) => {
+  var fs = __require("fs");
+  var path = __require("path");
+  var os = __require("os");
+  var crypto2 = __require("crypto");
+  var TIPS = [
+    "\u25C8 encrypted .env [www.dotenvx.com]",
+    "\u25C8 secrets for agents [www.dotenvx.com]",
+    "\u2301 auth for agents [www.vestauth.com]",
+    "\u2318 custom filepath { path: '/custom/path/.env' }",
+    "\u2318 enable debugging { debug: true }",
+    "\u2318 override existing { override: true }",
+    "\u2318 suppress logs { quiet: true }",
+    "\u2318 multiple files { path: ['.env.local', '.env'] }"
+  ];
+  function _getRandomTip() {
+    return TIPS[Math.floor(Math.random() * TIPS.length)];
+  }
+  function parseBoolean(value) {
+    if (typeof value === "string") {
+      return !["false", "0", "no", "off", ""].includes(value.toLowerCase());
+    }
+    return Boolean(value);
+  }
+  function supportsAnsi() {
+    return process.stdout.isTTY;
+  }
+  function dim(text) {
+    return supportsAnsi() ? `\x1B[2m${text}\x1B[0m` : text;
+  }
+  var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
+  function parse5(src) {
+    const obj = {};
+    let lines = src.toString();
+    lines = lines.replace(/\r\n?/mg, `
+`);
+    let match;
+    while ((match = LINE.exec(lines)) != null) {
+      const key = match[1];
+      let value = match[2] || "";
+      value = value.trim();
+      const maybeQuote = value[0];
+      value = value.replace(/^(['"`])([\s\S]*)\1$/mg, "$2");
+      if (maybeQuote === '"') {
+        value = value.replace(/\\n/g, `
+`);
+        value = value.replace(/\\r/g, "\r");
+      }
+      obj[key] = value;
+    }
+    return obj;
+  }
+  function _parseVault(options) {
+    options = options || {};
+    const vaultPath = _vaultPath(options);
+    options.path = vaultPath;
+    const result = DotenvModule.configDotenv(options);
+    if (!result.parsed) {
+      const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`);
+      err.code = "MISSING_DATA";
+      throw err;
+    }
+    const keys = _dotenvKey(options).split(",");
+    const length = keys.length;
+    let decrypted;
+    for (let i = 0;i < length; i++) {
+      try {
+        const key = keys[i].trim();
+        const attrs = _instructions(result, key);
+        decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key);
+        break;
+      } catch (error48) {
+        if (i + 1 >= length) {
+          throw error48;
+        }
+      }
+    }
+    return DotenvModule.parse(decrypted);
+  }
+  function _warn(message) {
+    console.error(`\u26A0 ${message}`);
+  }
+  function _debug(message) {
+    console.log(`\u2506 ${message}`);
+  }
+  function _log(message) {
+    console.log(`\u25C7 ${message}`);
+  }
+  function _dotenvKey(options) {
+    if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
+      return options.DOTENV_KEY;
+    }
+    if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
+      return process.env.DOTENV_KEY;
+    }
+    return "";
+  }
+  function _instructions(result, dotenvKey) {
+    let uri;
+    try {
+      uri = new URL(dotenvKey);
+    } catch (error48) {
+      if (error48.code === "ERR_INVALID_URL") {
+        const err = new Error("INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      }
+      throw error48;
+    }
+    const key = uri.password;
+    if (!key) {
+      const err = new Error("INVALID_DOTENV_KEY: Missing key part");
+      err.code = "INVALID_DOTENV_KEY";
+      throw err;
+    }
+    const environment = uri.searchParams.get("environment");
+    if (!environment) {
+      const err = new Error("INVALID_DOTENV_KEY: Missing environment part");
+      err.code = "INVALID_DOTENV_KEY";
+      throw err;
+    }
+    const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`;
+    const ciphertext = result.parsed[environmentKey];
+    if (!ciphertext) {
+      const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`);
+      err.code = "NOT_FOUND_DOTENV_ENVIRONMENT";
+      throw err;
+    }
+    return { ciphertext, key };
+  }
+  function _vaultPath(options) {
+    let possibleVaultPath = null;
+    if (options && options.path && options.path.length > 0) {
+      if (Array.isArray(options.path)) {
+        for (const filepath of options.path) {
+          if (fs.existsSync(filepath)) {
+            possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
+          }
+        }
+      } else {
+        possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
+      }
+    } else {
+      possibleVaultPath = path.resolve(process.cwd(), ".env.vault");
+    }
+    if (fs.existsSync(possibleVaultPath)) {
+      return possibleVaultPath;
+    }
+    return null;
+  }
+  function _resolveHome(envPath) {
+    return envPath[0] === "~" ? path.join(os.homedir(), envPath.slice(1)) : envPath;
+  }
+  function _configVault(options) {
+    const debug = parseBoolean(process.env.DOTENV_CONFIG_DEBUG || options && options.debug);
+    const quiet = parseBoolean(process.env.DOTENV_CONFIG_QUIET || options && options.quiet);
+    if (debug || !quiet) {
+      _log("loading env from encrypted .env.vault");
+    }
+    const parsed = DotenvModule._parseVault(options);
+    let processEnv = process.env;
+    if (options && options.processEnv != null) {
+      processEnv = options.processEnv;
+    }
+    DotenvModule.populate(processEnv, parsed, options);
+    return { parsed };
+  }
+  function configDotenv(options) {
+    const dotenvPath = path.resolve(process.cwd(), ".env");
+    let encoding = "utf8";
+    let processEnv = process.env;
+    if (options && options.processEnv != null) {
+      processEnv = options.processEnv;
+    }
+    let debug = parseBoolean(processEnv.DOTENV_CONFIG_DEBUG || options && options.debug);
+    let quiet = parseBoolean(processEnv.DOTENV_CONFIG_QUIET || options && options.quiet);
+    if (options && options.encoding) {
+      encoding = options.encoding;
+    } else {
+      if (debug) {
+        _debug("no encoding is specified (UTF-8 is used by default)");
+      }
+    }
+    let optionPaths = [dotenvPath];
+    if (options && options.path) {
+      if (!Array.isArray(options.path)) {
+        optionPaths = [_resolveHome(options.path)];
+      } else {
+        optionPaths = [];
+        for (const filepath of options.path) {
+          optionPaths.push(_resolveHome(filepath));
+        }
+      }
+    }
+    let lastError;
+    const parsedAll = {};
+    for (const path2 of optionPaths) {
+      try {
+        const parsed = DotenvModule.parse(fs.readFileSync(path2, { encoding }));
+        DotenvModule.populate(parsedAll, parsed, options);
+      } catch (e) {
+        if (debug) {
+          _debug(`failed to load ${path2} ${e.message}`);
+        }
+        lastError = e;
+      }
+    }
+    const populated = DotenvModule.populate(processEnv, parsedAll, options);
+    debug = parseBoolean(processEnv.DOTENV_CONFIG_DEBUG || debug);
+    quiet = parseBoolean(processEnv.DOTENV_CONFIG_QUIET || quiet);
+    if (debug || !quiet) {
+      const keysCount = Object.keys(populated).length;
+      const shortPaths = [];
+      for (const filePath of optionPaths) {
+        try {
+          const relative = path.relative(process.cwd(), filePath);
+          shortPaths.push(relative);
+        } catch (e) {
+          if (debug) {
+            _debug(`failed to load ${filePath} ${e.message}`);
+          }
+          lastError = e;
+        }
+      }
+      _log(`injecting env (${keysCount}) from ${shortPaths.join(",")} ${dim(`// tip: ${_getRandomTip()}`)}`);
+    }
+    if (lastError) {
+      return { parsed: parsedAll, error: lastError };
+    } else {
+      return { parsed: parsedAll };
+    }
+  }
+  function config2(options) {
+    if (_dotenvKey(options).length === 0) {
+      return DotenvModule.configDotenv(options);
+    }
+    const vaultPath = _vaultPath(options);
+    if (!vaultPath) {
+      _warn(`you set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}`);
+      return DotenvModule.configDotenv(options);
+    }
+    return DotenvModule._configVault(options);
+  }
+  function decrypt(encrypted, keyStr) {
+    const key = Buffer.from(keyStr.slice(-64), "hex");
+    let ciphertext = Buffer.from(encrypted, "base64");
+    const nonce = ciphertext.subarray(0, 12);
+    const authTag = ciphertext.subarray(-16);
+    ciphertext = ciphertext.subarray(12, -16);
+    try {
+      const aesgcm = crypto2.createDecipheriv("aes-256-gcm", key, nonce);
+      aesgcm.setAuthTag(authTag);
+      return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
+    } catch (error48) {
+      const isRange = error48 instanceof RangeError;
+      const invalidKeyLength = error48.message === "Invalid key length";
+      const decryptionFailed = error48.message === "Unsupported state or unable to authenticate data";
+      if (isRange || invalidKeyLength) {
+        const err = new Error("INVALID_DOTENV_KEY: It must be 64 characters long (or more)");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      } else if (decryptionFailed) {
+        const err = new Error("DECRYPTION_FAILED: Please check your DOTENV_KEY");
+        err.code = "DECRYPTION_FAILED";
+        throw err;
+      } else {
+        throw error48;
+      }
+    }
+  }
+  function populate(processEnv, parsed, options = {}) {
+    const debug = Boolean(options && options.debug);
+    const override = Boolean(options && options.override);
+    const populated = {};
+    if (typeof parsed !== "object") {
+      const err = new Error("OBJECT_REQUIRED: Please check the processEnv argument being passed to populate");
+      err.code = "OBJECT_REQUIRED";
+      throw err;
+    }
+    for (const key of Object.keys(parsed)) {
+      if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
+        if (override === true) {
+          processEnv[key] = parsed[key];
+          populated[key] = parsed[key];
+        }
+        if (debug) {
+          if (override === true) {
+            _debug(`"${key}" is already defined and WAS overwritten`);
+          } else {
+            _debug(`"${key}" is already defined and was NOT overwritten`);
+          }
+        }
+      } else {
+        processEnv[key] = parsed[key];
+        populated[key] = parsed[key];
+      }
+    }
+    return populated;
+  }
+  var DotenvModule = {
+    configDotenv,
+    _configVault,
+    _parseVault,
+    config: config2,
+    decrypt,
+    parse: parse5,
+    populate
+  };
+  exports.configDotenv = DotenvModule.configDotenv;
+  exports._configVault = DotenvModule._configVault;
+  exports._parseVault = DotenvModule._parseVault;
+  exports.config = DotenvModule.config;
+  exports.decrypt = DotenvModule.decrypt;
+  exports.parse = DotenvModule.parse;
+  exports.populate = DotenvModule.populate;
+  module.exports = DotenvModule;
+});
+
 // node_modules/pino-std-serializers/lib/err-helpers.js
 var require_err_helpers = __commonJS((exports, module) => {
   var isErrorLike = (err) => {
@@ -30856,8 +31175,8 @@ var require_req = __commonJS((exports, module) => {
     if (req.originalUrl) {
       _req.url = req.originalUrl;
     } else {
-      const path = req.path;
-      _req.url = typeof path === "string" ? path : req.url ? req.url.path || req.url : undefined;
+      const path2 = req.path;
+      _req.url = typeof path2 === "string" ? path2 : req.url ? req.url.path || req.url : undefined;
     }
     if (req.query) {
       _req.query = req.query;
@@ -31013,14 +31332,14 @@ var require_redact = __commonJS((exports, module) => {
     }
     return obj;
   }
-  function parsePath(path) {
+  function parsePath(path2) {
     const parts = [];
     let current = "";
     let inBrackets = false;
     let inQuotes = false;
     let quoteChar = "";
-    for (let i = 0;i < path.length; i++) {
-      const char = path[i];
+    for (let i = 0;i < path2.length; i++) {
+      const char = path2[i];
       if (!inBrackets && char === ".") {
         if (current) {
           parts.push(current);
@@ -31151,10 +31470,10 @@ var require_redact = __commonJS((exports, module) => {
     return current;
   }
   function redactPaths(obj, paths, censor, remove = false) {
-    for (const path of paths) {
-      const parts = parsePath(path);
+    for (const path2 of paths) {
+      const parts = parsePath(path2);
       if (parts.includes("*")) {
-        redactWildcardPath(obj, parts, censor, path, remove);
+        redactWildcardPath(obj, parts, censor, path2, remove);
       } else {
         if (remove) {
           removeKey(obj, parts);
@@ -31241,8 +31560,8 @@ var require_redact = __commonJS((exports, module) => {
         }
       } else {
         if (afterWildcard.includes("*")) {
-          const wrappedCensor = typeof censor === "function" ? (value, path) => {
-            const fullPath = [...pathArray.slice(0, pathLength), ...path];
+          const wrappedCensor = typeof censor === "function" ? (value, path2) => {
+            const fullPath = [...pathArray.slice(0, pathLength), ...path2];
             return censor(value, fullPath);
           } : censor;
           redactWildcardPath(current, afterWildcard, wrappedCensor, originalPath, remove);
@@ -31279,8 +31598,8 @@ var require_redact = __commonJS((exports, module) => {
       return null;
     }
     const pathStructure = new Map;
-    for (const path of pathsToClone) {
-      const parts = parsePath(path);
+    for (const path2 of pathsToClone) {
+      const parts = parsePath(path2);
       let current = pathStructure;
       for (let i = 0;i < parts.length; i++) {
         const part = parts[i];
@@ -31332,24 +31651,24 @@ var require_redact = __commonJS((exports, module) => {
     }
     return cloneSelectively(obj, pathStructure);
   }
-  function validatePath(path) {
-    if (typeof path !== "string") {
+  function validatePath(path2) {
+    if (typeof path2 !== "string") {
       throw new Error("Paths must be (non-empty) strings");
     }
-    if (path === "") {
+    if (path2 === "") {
       throw new Error("Invalid redaction path ()");
     }
-    if (path.includes("..")) {
-      throw new Error(`Invalid redaction path (${path})`);
+    if (path2.includes("..")) {
+      throw new Error(`Invalid redaction path (${path2})`);
     }
-    if (path.includes(",")) {
-      throw new Error(`Invalid redaction path (${path})`);
+    if (path2.includes(",")) {
+      throw new Error(`Invalid redaction path (${path2})`);
     }
     let bracketCount = 0;
     let inQuotes = false;
     let quoteChar = "";
-    for (let i = 0;i < path.length; i++) {
-      const char = path[i];
+    for (let i = 0;i < path2.length; i++) {
+      const char = path2[i];
       if ((char === '"' || char === "'") && bracketCount > 0) {
         if (!inQuotes) {
           inQuotes = true;
@@ -31363,20 +31682,20 @@ var require_redact = __commonJS((exports, module) => {
       } else if (char === "]" && !inQuotes) {
         bracketCount--;
         if (bracketCount < 0) {
-          throw new Error(`Invalid redaction path (${path})`);
+          throw new Error(`Invalid redaction path (${path2})`);
         }
       }
     }
     if (bracketCount !== 0) {
-      throw new Error(`Invalid redaction path (${path})`);
+      throw new Error(`Invalid redaction path (${path2})`);
     }
   }
   function validatePaths(paths) {
     if (!Array.isArray(paths)) {
       throw new TypeError("paths must be an array");
     }
-    for (const path of paths) {
-      validatePath(path);
+    for (const path2 of paths) {
+      validatePath(path2);
     }
   }
   function slowRedact(options = {}) {
@@ -31538,8 +31857,8 @@ var require_redaction = __commonJS((exports, module) => {
       if (shape[k] === null) {
         o[k] = (value) => topCensor(value, [k]);
       } else {
-        const wrappedCensor = typeof censor === "function" ? (value, path) => {
-          return censor(value, [k, ...path]);
+        const wrappedCensor = typeof censor === "function" ? (value, path2) => {
+          return censor(value, [k, ...path2]);
         } : censor;
         o[k] = Redact({
           paths: shape[k],
@@ -31750,7 +32069,7 @@ var require_sonic_boom = __commonJS((exports, module) => {
   var fs = __require("fs");
   var EventEmitter = __require("events");
   var inherits = __require("util").inherits;
-  var path = __require("path");
+  var path2 = __require("path");
   var sleep = require_atomic_sleep();
   var assert2 = __require("assert");
   var BUSY_WRITE_TIMEOUT = 100;
@@ -31805,7 +32124,7 @@ var require_sonic_boom = __commonJS((exports, module) => {
     if (sonic.sync) {
       try {
         if (sonic.mkdir)
-          fs.mkdirSync(path.dirname(file2), { recursive: true });
+          fs.mkdirSync(path2.dirname(file2), { recursive: true });
         const fd = fs.openSync(file2, flags, mode);
         fileOpened(null, fd);
       } catch (err) {
@@ -31813,7 +32132,7 @@ var require_sonic_boom = __commonJS((exports, module) => {
         throw err;
       }
     } else if (sonic.mkdir) {
-      fs.mkdir(path.dirname(file2), { recursive: true }, (err) => {
+      fs.mkdir(path2.dirname(file2), { recursive: true }, (err) => {
         if (err)
           return fileOpened(err);
         fs.open(file2, flags, mode, fileOpened);
@@ -33032,15 +33351,15 @@ var require_transport = __commonJS((exports, module) => {
     if (!unquoted) {
       return false;
     }
-    let path = unquoted;
-    if (path.startsWith("file://")) {
+    let path2 = unquoted;
+    if (path2.startsWith("file://")) {
       try {
-        path = fileURLToPath(path);
+        path2 = fileURLToPath(path2);
       } catch {
         return false;
       }
     }
-    return isAbsolute(path) && !existsSync(path);
+    return isAbsolute(path2) && !existsSync(path2);
   }
   function stripQuotes(value) {
     const first = value[0];
@@ -34876,325 +35195,6 @@ var require_pino = __commonJS((exports, module) => {
   module.exports.version = version2;
   module.exports.default = pino;
   module.exports.pino = pino;
-});
-
-// node_modules/dotenv/lib/main.js
-var require_main = __commonJS((exports, module) => {
-  var fs = __require("fs");
-  var path = __require("path");
-  var os = __require("os");
-  var crypto2 = __require("crypto");
-  var TIPS = [
-    "\u25C8 encrypted .env [www.dotenvx.com]",
-    "\u25C8 secrets for agents [www.dotenvx.com]",
-    "\u2301 auth for agents [www.vestauth.com]",
-    "\u2318 custom filepath { path: '/custom/path/.env' }",
-    "\u2318 enable debugging { debug: true }",
-    "\u2318 override existing { override: true }",
-    "\u2318 suppress logs { quiet: true }",
-    "\u2318 multiple files { path: ['.env.local', '.env'] }"
-  ];
-  function _getRandomTip() {
-    return TIPS[Math.floor(Math.random() * TIPS.length)];
-  }
-  function parseBoolean(value) {
-    if (typeof value === "string") {
-      return !["false", "0", "no", "off", ""].includes(value.toLowerCase());
-    }
-    return Boolean(value);
-  }
-  function supportsAnsi() {
-    return process.stdout.isTTY;
-  }
-  function dim(text) {
-    return supportsAnsi() ? `\x1B[2m${text}\x1B[0m` : text;
-  }
-  var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
-  function parse5(src) {
-    const obj = {};
-    let lines = src.toString();
-    lines = lines.replace(/\r\n?/mg, `
-`);
-    let match;
-    while ((match = LINE.exec(lines)) != null) {
-      const key = match[1];
-      let value = match[2] || "";
-      value = value.trim();
-      const maybeQuote = value[0];
-      value = value.replace(/^(['"`])([\s\S]*)\1$/mg, "$2");
-      if (maybeQuote === '"') {
-        value = value.replace(/\\n/g, `
-`);
-        value = value.replace(/\\r/g, "\r");
-      }
-      obj[key] = value;
-    }
-    return obj;
-  }
-  function _parseVault(options) {
-    options = options || {};
-    const vaultPath = _vaultPath(options);
-    options.path = vaultPath;
-    const result = DotenvModule.configDotenv(options);
-    if (!result.parsed) {
-      const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`);
-      err.code = "MISSING_DATA";
-      throw err;
-    }
-    const keys = _dotenvKey(options).split(",");
-    const length = keys.length;
-    let decrypted;
-    for (let i = 0;i < length; i++) {
-      try {
-        const key = keys[i].trim();
-        const attrs = _instructions(result, key);
-        decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key);
-        break;
-      } catch (error48) {
-        if (i + 1 >= length) {
-          throw error48;
-        }
-      }
-    }
-    return DotenvModule.parse(decrypted);
-  }
-  function _warn(message) {
-    console.error(`\u26A0 ${message}`);
-  }
-  function _debug(message) {
-    console.log(`\u2506 ${message}`);
-  }
-  function _log(message) {
-    console.log(`\u25C7 ${message}`);
-  }
-  function _dotenvKey(options) {
-    if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
-      return options.DOTENV_KEY;
-    }
-    if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
-      return process.env.DOTENV_KEY;
-    }
-    return "";
-  }
-  function _instructions(result, dotenvKey) {
-    let uri;
-    try {
-      uri = new URL(dotenvKey);
-    } catch (error48) {
-      if (error48.code === "ERR_INVALID_URL") {
-        const err = new Error("INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development");
-        err.code = "INVALID_DOTENV_KEY";
-        throw err;
-      }
-      throw error48;
-    }
-    const key = uri.password;
-    if (!key) {
-      const err = new Error("INVALID_DOTENV_KEY: Missing key part");
-      err.code = "INVALID_DOTENV_KEY";
-      throw err;
-    }
-    const environment = uri.searchParams.get("environment");
-    if (!environment) {
-      const err = new Error("INVALID_DOTENV_KEY: Missing environment part");
-      err.code = "INVALID_DOTENV_KEY";
-      throw err;
-    }
-    const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`;
-    const ciphertext = result.parsed[environmentKey];
-    if (!ciphertext) {
-      const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`);
-      err.code = "NOT_FOUND_DOTENV_ENVIRONMENT";
-      throw err;
-    }
-    return { ciphertext, key };
-  }
-  function _vaultPath(options) {
-    let possibleVaultPath = null;
-    if (options && options.path && options.path.length > 0) {
-      if (Array.isArray(options.path)) {
-        for (const filepath of options.path) {
-          if (fs.existsSync(filepath)) {
-            possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
-          }
-        }
-      } else {
-        possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
-      }
-    } else {
-      possibleVaultPath = path.resolve(process.cwd(), ".env.vault");
-    }
-    if (fs.existsSync(possibleVaultPath)) {
-      return possibleVaultPath;
-    }
-    return null;
-  }
-  function _resolveHome(envPath) {
-    return envPath[0] === "~" ? path.join(os.homedir(), envPath.slice(1)) : envPath;
-  }
-  function _configVault(options) {
-    const debug = parseBoolean(process.env.DOTENV_CONFIG_DEBUG || options && options.debug);
-    const quiet = parseBoolean(process.env.DOTENV_CONFIG_QUIET || options && options.quiet);
-    if (debug || !quiet) {
-      _log("loading env from encrypted .env.vault");
-    }
-    const parsed = DotenvModule._parseVault(options);
-    let processEnv = process.env;
-    if (options && options.processEnv != null) {
-      processEnv = options.processEnv;
-    }
-    DotenvModule.populate(processEnv, parsed, options);
-    return { parsed };
-  }
-  function configDotenv(options) {
-    const dotenvPath = path.resolve(process.cwd(), ".env");
-    let encoding = "utf8";
-    let processEnv = process.env;
-    if (options && options.processEnv != null) {
-      processEnv = options.processEnv;
-    }
-    let debug = parseBoolean(processEnv.DOTENV_CONFIG_DEBUG || options && options.debug);
-    let quiet = parseBoolean(processEnv.DOTENV_CONFIG_QUIET || options && options.quiet);
-    if (options && options.encoding) {
-      encoding = options.encoding;
-    } else {
-      if (debug) {
-        _debug("no encoding is specified (UTF-8 is used by default)");
-      }
-    }
-    let optionPaths = [dotenvPath];
-    if (options && options.path) {
-      if (!Array.isArray(options.path)) {
-        optionPaths = [_resolveHome(options.path)];
-      } else {
-        optionPaths = [];
-        for (const filepath of options.path) {
-          optionPaths.push(_resolveHome(filepath));
-        }
-      }
-    }
-    let lastError;
-    const parsedAll = {};
-    for (const path2 of optionPaths) {
-      try {
-        const parsed = DotenvModule.parse(fs.readFileSync(path2, { encoding }));
-        DotenvModule.populate(parsedAll, parsed, options);
-      } catch (e) {
-        if (debug) {
-          _debug(`failed to load ${path2} ${e.message}`);
-        }
-        lastError = e;
-      }
-    }
-    const populated = DotenvModule.populate(processEnv, parsedAll, options);
-    debug = parseBoolean(processEnv.DOTENV_CONFIG_DEBUG || debug);
-    quiet = parseBoolean(processEnv.DOTENV_CONFIG_QUIET || quiet);
-    if (debug || !quiet) {
-      const keysCount = Object.keys(populated).length;
-      const shortPaths = [];
-      for (const filePath of optionPaths) {
-        try {
-          const relative = path.relative(process.cwd(), filePath);
-          shortPaths.push(relative);
-        } catch (e) {
-          if (debug) {
-            _debug(`failed to load ${filePath} ${e.message}`);
-          }
-          lastError = e;
-        }
-      }
-      _log(`injecting env (${keysCount}) from ${shortPaths.join(",")} ${dim(`// tip: ${_getRandomTip()}`)}`);
-    }
-    if (lastError) {
-      return { parsed: parsedAll, error: lastError };
-    } else {
-      return { parsed: parsedAll };
-    }
-  }
-  function config2(options) {
-    if (_dotenvKey(options).length === 0) {
-      return DotenvModule.configDotenv(options);
-    }
-    const vaultPath = _vaultPath(options);
-    if (!vaultPath) {
-      _warn(`you set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}`);
-      return DotenvModule.configDotenv(options);
-    }
-    return DotenvModule._configVault(options);
-  }
-  function decrypt(encrypted, keyStr) {
-    const key = Buffer.from(keyStr.slice(-64), "hex");
-    let ciphertext = Buffer.from(encrypted, "base64");
-    const nonce = ciphertext.subarray(0, 12);
-    const authTag = ciphertext.subarray(-16);
-    ciphertext = ciphertext.subarray(12, -16);
-    try {
-      const aesgcm = crypto2.createDecipheriv("aes-256-gcm", key, nonce);
-      aesgcm.setAuthTag(authTag);
-      return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
-    } catch (error48) {
-      const isRange = error48 instanceof RangeError;
-      const invalidKeyLength = error48.message === "Invalid key length";
-      const decryptionFailed = error48.message === "Unsupported state or unable to authenticate data";
-      if (isRange || invalidKeyLength) {
-        const err = new Error("INVALID_DOTENV_KEY: It must be 64 characters long (or more)");
-        err.code = "INVALID_DOTENV_KEY";
-        throw err;
-      } else if (decryptionFailed) {
-        const err = new Error("DECRYPTION_FAILED: Please check your DOTENV_KEY");
-        err.code = "DECRYPTION_FAILED";
-        throw err;
-      } else {
-        throw error48;
-      }
-    }
-  }
-  function populate(processEnv, parsed, options = {}) {
-    const debug = Boolean(options && options.debug);
-    const override = Boolean(options && options.override);
-    const populated = {};
-    if (typeof parsed !== "object") {
-      const err = new Error("OBJECT_REQUIRED: Please check the processEnv argument being passed to populate");
-      err.code = "OBJECT_REQUIRED";
-      throw err;
-    }
-    for (const key of Object.keys(parsed)) {
-      if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
-        if (override === true) {
-          processEnv[key] = parsed[key];
-          populated[key] = parsed[key];
-        }
-        if (debug) {
-          if (override === true) {
-            _debug(`"${key}" is already defined and WAS overwritten`);
-          } else {
-            _debug(`"${key}" is already defined and was NOT overwritten`);
-          }
-        }
-      } else {
-        processEnv[key] = parsed[key];
-        populated[key] = parsed[key];
-      }
-    }
-    return populated;
-  }
-  var DotenvModule = {
-    configDotenv,
-    _configVault,
-    _parseVault,
-    config: config2,
-    decrypt,
-    parse: parse5,
-    populate
-  };
-  exports.configDotenv = DotenvModule.configDotenv;
-  exports._configVault = DotenvModule._configVault;
-  exports._parseVault = DotenvModule._parseVault;
-  exports.config = DotenvModule.config;
-  exports.decrypt = DotenvModule.decrypt;
-  exports.parse = DotenvModule.parse;
-  exports.populate = DotenvModule.populate;
-  module.exports = DotenvModule;
 });
 
 // node_modules/delayed-stream/lib/delayed_stream.js
@@ -87321,7 +87321,7 @@ var require_cache = __commonJS((exports) => {
         cacheEntry = this.createValueEntry(client2, val);
         this.set(cacheKey, cacheEntry, parser.keys);
         this.emit("cached-key", cacheKey);
-      } else {}
+      }
       return structuredClone(val);
     }
     trackingOn() {
@@ -108590,7 +108590,7 @@ function finalize(ctx, schema) {
     result.$schema = "http://json-schema.org/draft-07/schema#";
   } else if (ctx.target === "draft-04") {
     result.$schema = "http://json-schema.org/draft-04/schema#";
-  } else if (ctx.target === "openapi-3.0") {} else {}
+  } else if (ctx.target === "openapi-3.0") {}
   if (ctx.external?.uri) {
     const id = ctx.external.registry.get(schema)?.id;
     if (!id)
@@ -108838,7 +108838,7 @@ var literalProcessor = (schema, ctx, json, _params) => {
     if (val === undefined) {
       if (ctx.unrepresentable === "throw") {
         throw new Error("Literal `undefined` cannot be represented in JSON Schema");
-      } else {}
+      }
     } else if (typeof val === "bigint") {
       if (ctx.unrepresentable === "throw") {
         throw new Error("BigInt literals cannot be represented in JSON Schema");
@@ -111183,6 +111183,27 @@ function date4(params) {
 
 // node_modules/zod/v4/classic/external.js
 config(en_default());
+// src/app/config/env.ts
+var import_dotenv = __toESM(require_main(), 1);
+import path from "path";
+import_dotenv.default.config({ path: path.join(process.cwd(), ".env") });
+var envSchema = exports_external.object({
+  NODE_ENV: exports_external.enum(["development", "production", "test"]).optional(),
+  PORT: exports_external.string().optional(),
+  NASA_API_KEY: exports_external.string(),
+  NASA_API_URL: exports_external.string().default("https://api.nasa.gov/planetary/apod"),
+  SIMBAD_BASE_URL: exports_external.string().default("https://simbad.u-strasbg.fr/simbad/sim-basic"),
+  REDIS_URL: exports_external.string(),
+  MONGO_URI: exports_external.string().optional(),
+  ALLOWED_ORIGINS: exports_external.string().optional().default("http://localhost:3000")
+});
+var parsedEnv = envSchema.safeParse(process.env);
+if (!parsedEnv.success) {
+  console.error("\u274C Invalid environment variables:", parsedEnv.error.format());
+  process.exit(1);
+}
+var env = parsedEnv.data;
+
 // src/app/route/index.ts
 var import_express2 = __toESM(require_express(), 1);
 
@@ -111209,26 +111230,6 @@ var validateRequest_default = validateRequest;
 
 // src/app/utils/logger.ts
 var import_pino = __toESM(require_pino(), 1);
-
-// src/app/config/env.ts
-var import_dotenv = __toESM(require_main(), 1);
-import path from "path";
-import_dotenv.default.config({ path: path.join(process.cwd(), ".env") });
-var envSchema = exports_external.object({
-  NODE_ENV: exports_external.enum(["development", "production", "test"]).optional(),
-  PORT: exports_external.string().optional(),
-  NASA_API_KEY: exports_external.string(),
-  REDIS_URL: exports_external.string(),
-  MONGO_URI: exports_external.string().optional()
-});
-var parsedEnv = envSchema.safeParse(process.env);
-if (!parsedEnv.success) {
-  console.error("\u274C Invalid environment variables:", parsedEnv.error.format());
-  process.exit(1);
-}
-var env = parsedEnv.data;
-
-// src/app/utils/logger.ts
 var logger = import_pino.default({
   level: env.NODE_ENV === "development" ? "debug" : "info",
   transport: env.NODE_ENV === "development" ? {
@@ -111241,6 +111242,16 @@ var logger = import_pino.default({
   } : undefined
 });
 var logger_default = logger;
+
+// src/app/utils/response.ts
+var sendResponse = (res, data) => {
+  res.status(data.statusCode).json({
+    success: data.success,
+    message: data.message,
+    source: data.source,
+    data: data.data
+  });
+};
 
 // node_modules/axios/lib/helpers/bind.js
 function bind(fn, thisArg) {
@@ -114769,21 +114780,31 @@ var import_google_translate_api_x = __toESM(require_google_translate_api_x(), 1)
 var import_mongodb = __toESM(require_lib6(), 1);
 var client = null;
 var db = null;
+var MONGO_OPTIONS = {
+  serverApi: {
+    version: import_mongodb.ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true
+  },
+  connectTimeoutMS: 1e4,
+  socketTimeoutMS: 45000
+};
 var connectMongo = async () => {
   if (!env.MONGO_URI) {
-    logger_default.warn("\u26A0\uFE0F MONGO_URI missing, database storage will be unavailable.");
+    logger_default.warn("\u26A0\uFE0F MONGO_URI missing. Persistent storage (MongoDB) is DISABLED.");
     return null;
   }
   if (db)
     return db;
   try {
-    client = new import_mongodb.MongoClient(env.MONGO_URI);
+    client = new import_mongodb.MongoClient(env.MONGO_URI, MONGO_OPTIONS);
     await client.connect();
     db = client.db("space-images");
-    logger_default.info("\uD83D\uDCE1 Connected to MongoDB - Premium storage activated.");
+    await db.command({ ping: 1 });
+    logger_default.info("\uD83D\uDCE1 MongoDB: Connection established (Premium storage active)");
     return db;
   } catch (err) {
-    logger_default.error(err instanceof Error ? err : { err }, "\u274C MongoDB connection failed");
+    logger_default.error({ err }, "\u274C MongoDB: Connection failed");
     return null;
   }
 };
@@ -114792,10 +114813,22 @@ var getDb = () => db;
 // src/app/config/redis.config.ts
 var import_redis = __toESM(require_dist4(), 1);
 var redisClient = import_redis.createClient({
-  url: env.REDIS_URL
+  url: env.REDIS_URL,
+  pingInterval: 50000,
+  socket: {
+    reconnectStrategy: (retries) => {
+      if (retries > 10) {
+        logger_default.error("Redis reconnection failed after 10 attempts");
+        return new Error("Retry limit reached");
+      }
+      return Math.min(retries * 50, 2000);
+    }
+  }
 });
-redisClient.on("error", (err) => logger_default.error(err, "Redis Client Error"));
-redisClient.on("connect", () => logger_default.info("\uD83D\uDE80 Redis Client Connected"));
+redisClient.on("error", (err) => logger_default.error({ err }, "Redis Client Error"));
+redisClient.on("connect", () => logger_default.info("\uD83D\uDE80 Redis: Connection established"));
+redisClient.on("ready", () => logger_default.info("\u2705 Redis: Client ready to use"));
+redisClient.on("reconnecting", () => logger_default.warn("\uD83D\uDD04 Redis: Attempting to reconnect..."));
 var redis_config_default = redisClient;
 
 // src/app/services/storage.service.ts
@@ -114809,44 +114842,47 @@ var StorageService = {
       if (db2) {
         const item = await db2.collection("apods").findOne({ cacheKey: key });
         if (item) {
-          logger_default.info(`\uD83C\uDFDB\uFE0F MongoDB Hit for: ${key}`);
           redis_config_default.set(key, JSON.stringify(item), { EX: 86400 }).catch(() => {});
           return item;
         }
       }
     } catch (err) {
-      logger_default.error(err instanceof Error ? err : { err }, "Storage.get failed");
+      logger_default.error({ err }, "Storage.get failed");
     }
     return null;
   },
   async set(key, data, ttl = 86400) {
     try {
-      const dataString = JSON.stringify(data);
-      await redis_config_default.set(key, dataString, { EX: ttl });
+      await redis_config_default.set(key, JSON.stringify(data), { EX: ttl });
       const db2 = getDb();
       if (db2) {
         await db2.collection("apods").updateOne({ cacheKey: key }, { $set: { ...data, cacheKey: key, updatedAt: new Date } }, { upsert: true });
       }
     } catch (err) {
-      logger_default.error(err instanceof Error ? err : { err }, "Storage.set failed");
+      logger_default.error({ err }, "Storage.set failed");
     }
   },
   async init() {
+    if (!redis_config_default.isOpen) {
+      await redis_config_default.connect();
+    }
     await connectMongo();
   }
 };
 
 // src/app/modules/apod/apod.service.ts
-var NASA_APOD_URL = "https://api.nasa.gov/planetary/apod";
 var CACHE_KEY_PREFIX = "apod:";
+var getDefaults = (date5, lang) => ({
+  targetDate: date5 || new Date().toISOString().split("T")[0],
+  targetLang: lang || "en"
+});
 var processAndStoreApod = async (data, lang = "en") => {
-  const targetDate = data.date;
-  const targetLang = lang;
+  const { targetDate, targetLang } = getDefaults(data.date, lang);
   const cacheKey = `${CACHE_KEY_PREFIX}${targetLang}:${targetDate}`;
   let processedData = { ...data };
   if (targetLang !== "en") {
     try {
-      logger_default.info(`\uD83C\uDF0E Translating APOD to ${targetLang}`);
+      logger_default.info({ lang: targetLang }, "\uD83C\uDF0E Translating APOD");
       const [titleRes, expRes] = await Promise.all([
         import_google_translate_api_x.default(data.title, { to: targetLang }),
         import_google_translate_api_x.default(data.explanation, { to: targetLang })
@@ -114857,53 +114893,33 @@ var processAndStoreApod = async (data, lang = "en") => {
         explanation: expRes.text
       };
     } catch (err) {
-      logger_default.error(err instanceof Error ? err : { err }, "Translation failed, falling back to English");
+      logger_default.error({ err }, "Translation failed, falling back to English");
     }
   }
-  const isGalaxy = processedData.explanation.toLowerCase().includes("galaxy");
-  const isNebula = processedData.explanation.toLowerCase().includes("nebula");
-  const isCluster = processedData.explanation.toLowerCase().includes("cluster");
+  const exp = processedData.explanation.toLowerCase();
+  const objectType = exp.includes("galaxy") ? "Galaxy" : exp.includes("nebula") ? "Nebula" : exp.includes("cluster") ? "Star Cluster" : "Celestial Object";
   const enrichedData = {
     ...processedData,
-    object_type: isGalaxy ? "Galaxy" : isNebula ? "Nebula" : isCluster ? "Star Cluster" : "Celestial Object",
+    object_type: objectType,
     constellation: "Unknown Constellation",
-    more_info_url: `https://simbad.u-strasbg.fr/simbad/sim-basic?Ident=${encodeURIComponent(processedData.title)}`
+    more_info_url: `${env.SIMBAD_BASE_URL}?Ident=${encodeURIComponent(processedData.title)}`
   };
-  const minimalData = {
-    date: enrichedData.date,
-    title: enrichedData.title,
-    explanation: enrichedData.explanation,
-    url: enrichedData.url,
-    hdurl: enrichedData.hdurl,
-    media_type: enrichedData.media_type,
-    service_version: enrichedData.service_version,
-    copyright: enrichedData.copyright,
-    object_type: enrichedData.object_type,
-    constellation: enrichedData.constellation,
-    more_info_url: enrichedData.more_info_url
-  };
+  const { date: date5, title, explanation, url: url3, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url } = enrichedData;
+  const minimalData = { date: date5, title, explanation, url: url3, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url };
   await StorageService.set(cacheKey, minimalData);
   return enrichedData;
 };
 var getApodByDate = async (date5, lang) => {
-  const targetDate = date5 || new Date().toISOString().split("T")[0];
-  const targetLang = lang || "en";
+  const { targetDate, targetLang } = getDefaults(date5, lang);
   const cacheKey = `${CACHE_KEY_PREFIX}${targetLang}:${targetDate}`;
-  try {
-    const cachedData = await StorageService.get(cacheKey);
-    if (cachedData) {
-      logger_default.info(`\uD83C\uDFAF Cache Hit for APOD: ${targetDate} (${targetLang})`);
-      return { data: cachedData, source: "cache" };
-    }
-  } catch (err) {
-    logger_default.error(err instanceof Error ? err : { err }, "Storage fetch error");
+  const cachedData = await StorageService.get(cacheKey);
+  if (cachedData) {
+    logger_default.info({ date: targetDate, lang: targetLang }, "\uD83C\uDFAF Cache Hit for APOD");
+    return { data: cachedData, source: "cache" };
   }
-  logger_default.info(`\uD83C\uDF10 Fetching APOD from NASA for: ${targetDate}`);
-  const response = await axios_default.get(NASA_APOD_URL, {
-    params: {
-      api_key: env.NASA_API_KEY,
-      date: targetDate
-    }
+  logger_default.info({ date: targetDate }, "\uD83C\uDF10 Fetching APOD from NASA");
+  const response = await axios_default.get(env.NASA_API_URL, {
+    params: { api_key: env.NASA_API_KEY, date: targetDate }
   });
   return {
     data: await processAndStoreApod(response.data, targetLang),
@@ -114911,36 +114927,42 @@ var getApodByDate = async (date5, lang) => {
   };
 };
 var getRandomApod = async (lang = "en") => {
-  const targetLang = lang;
   logger_default.info("\uD83C\uDFB2 Fetching random APOD from NASA");
-  let attempts = 0;
-  while (attempts < 3) {
-    const response = await axios_default.get(NASA_APOD_URL, {
-      params: {
-        api_key: env.NASA_API_KEY,
-        count: 5
-      }
+  for (let i = 0;i < 3; i++) {
+    const response = await axios_default.get(env.NASA_API_URL, {
+      params: { api_key: env.NASA_API_KEY, count: 5 }
     });
-    const items = Array.isArray(response.data) ? response.data : [response.data];
-    const imageItems = items.filter((item) => item.media_type === "image");
+    const imageItems = (Array.isArray(response.data) ? response.data : [response.data]).filter((item) => item.media_type === "image");
     if (imageItems.length > 0) {
-      const firstItem = imageItems[0];
-      for (const item of imageItems) {
-        processAndStoreApod(item, targetLang).catch(() => {});
-      }
+      imageItems.forEach((item) => processAndStoreApod(item, lang).catch(() => {}));
       return {
-        data: await processAndStoreApod(firstItem, targetLang),
+        data: await processAndStoreApod(imageItems[0], lang),
         source: "api"
       };
     }
-    attempts++;
     logger_default.warn("No image found in random APOD fetch, retrying...");
   }
   throw new Error("Failed to find a random image APOD after several attempts");
 };
+var getApodRange = async (start_date, end_date, lang = "en") => {
+  logger_default.info({ start_date, end_date }, "\uD83D\uDCC5 Fetching APOD range from NASA");
+  const response = await axios_default.get(env.NASA_API_URL, {
+    params: { api_key: env.NASA_API_KEY, start_date, end_date }
+  });
+  const items = (Array.isArray(response.data) ? response.data : [response.data]).filter((item) => item.media_type === "image");
+  const processed = await Promise.all(items.map(async (item) => {
+    try {
+      return await processAndStoreApod(item, lang);
+    } catch {
+      return item;
+    }
+  }));
+  return { data: processed, source: "api" };
+};
 var ApodService = {
   getApodByDate,
-  getRandomApod
+  getRandomApod,
+  getApodRange
 };
 
 // src/app/modules/apod/apod.controller.ts
@@ -114948,13 +114970,14 @@ var getApod = async (req, res, next) => {
   try {
     const { date: date5, lang } = req.query;
     const result = await ApodService.getApodByDate(date5, lang);
-    res.status(200).json({
+    sendResponse(res, {
+      statusCode: 200,
       success: true,
       message: "Cosmic data retrieved successfully",
       ...result
     });
   } catch (error48) {
-    logger_default.error(error48 instanceof Error ? error48 : { error: error48 }, "Error fetching APOD:");
+    logger_default.error({ err: error48 }, "Error fetching APOD");
     next(error48);
   }
 };
@@ -114962,19 +114985,36 @@ var getRandomApod2 = async (req, res, next) => {
   try {
     const { lang } = req.query;
     const result = await ApodService.getRandomApod(lang);
-    res.status(200).json({
+    sendResponse(res, {
+      statusCode: 200,
       success: true,
       message: "Random discovery successful",
       ...result
     });
   } catch (error48) {
-    logger_default.error(error48 instanceof Error ? error48 : { error: error48 }, "Error fetching random APOD:");
+    logger_default.error({ err: error48 }, "Error fetching random APOD");
+    next(error48);
+  }
+};
+var getApodRange2 = async (req, res, next) => {
+  try {
+    const { start_date, end_date, lang } = req.query;
+    const result = await ApodService.getApodRange(start_date, end_date, lang);
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: "Weekly cosmic data retrieved successfully",
+      ...result
+    });
+  } catch (error48) {
+    logger_default.error({ err: error48 }, "Error fetching APOD range");
     next(error48);
   }
 };
 var ApodController = {
   getApod,
-  getRandomApod: getRandomApod2
+  getRandomApod: getRandomApod2,
+  getApodRange: getApodRange2
 };
 
 // src/app/modules/apod/apod.validation.ts
@@ -114983,18 +115023,26 @@ var getApodSchema = exports_external.object({
     date: exports_external.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format").optional()
   })
 });
+var getApodRangeSchema = exports_external.object({
+  query: exports_external.object({
+    start_date: exports_external.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Start date must be in YYYY-MM-DD format"),
+    end_date: exports_external.string().regex(/^\d{4}-\d{2}-\d{2}$/, "End date must be in YYYY-MM-DD format")
+  })
+});
 var ApodValidation = {
-  getApodSchema
+  getApodSchema,
+  getApodRangeSchema
 };
 
 // src/app/modules/apod/apod.route.ts
-var router = import_express.Router();
+var router = import_express.default.Router();
 router.get("/", validateRequest_default(ApodValidation.getApodSchema), ApodController.getApod);
 router.get("/random", ApodController.getRandomApod);
+router.get("/range", validateRequest_default(ApodValidation.getApodRangeSchema), ApodController.getApodRange);
 var ApodRoutes = router;
 
 // src/app/route/index.ts
-var router2 = import_express2.Router();
+var router2 = import_express2.default.Router();
 var moduleRoutes = [
   {
     path: "/apod",
@@ -115010,7 +115058,13 @@ var route_default = router2;
 var app = import_express3.default();
 app.use(helmet());
 app.use(import_cors.default({
-  origin: "*",
+  origin: (origin2, callback) => {
+    const allowedOrigins = env.ALLOWED_ORIGINS?.split(",") || [];
+    if (!origin2 || allowedOrigins.includes(origin2)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
@@ -115026,7 +115080,7 @@ var metricsMiddleware = import_express_prom_bundle.default({
 });
 app.use(metricsMiddleware);
 app.use((req, _res, next) => {
-  logger_default.info(`\u2728 Incoming signal on [${req.method}] ${req.path}`);
+  logger_default.info({ method: req.method, path: req.path }, "\u2728 Incoming signal");
   next();
 });
 var limiter = rate_limit_default({
@@ -115034,12 +115088,15 @@ var limiter = rate_limit_default({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: "\uD83C\uDF0C Too many signals from this sector. Please wait."
+  message: {
+    success: false,
+    message: "\uD83C\uDF0C Too many signals from this sector. Please wait."
+  }
 });
 app.use("/api", limiter);
 app.use("/api/v1", route_default);
-app.get("/", (req, res) => {
-  res.status(200).json({
+app.get("/", (_req, res) => {
+  res.json({
     success: true,
     message: "\uD83C\uDF0C Welcome to the Space Image of the Day API!",
     version: "1.0.0",
@@ -115049,32 +115106,30 @@ app.get("/", (req, res) => {
     }
   });
 });
-app.get("/health", (req, res) => {
-  res.status(200).json({
+app.get("/health", (_req, res) => {
+  res.json({
     status: "UP",
     timestamp: new Date().toISOString(),
     service: "Space Image of the Day API"
   });
 });
-app.use((req, res) => {
+app.use((_req, res) => {
   res.status(404).json({
     success: false,
     message: "\uD83D\uDE80 Path not found in this galaxy."
   });
 });
 app.use((err, req, res, _next) => {
-  let statusCode = err.status || 500;
-  let message = err.message || "Internal Starship Error";
+  const statusCode = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Starship Error";
   if (err instanceof exports_external.ZodError) {
-    statusCode = 400;
-    message = "\u26A0\uFE0F Galactic Navigation Error: Invalid request data.";
-    return res.status(statusCode).json({
+    return res.status(400).json({
       success: false,
-      message,
+      message: "\u26A0\uFE0F Galactic Navigation Error: Invalid request data.",
       issues: err.issues
     });
   }
-  logger_default.error(err, `Error: ${message}`);
+  logger_default.error({ err, path: req.path }, message);
   res.status(statusCode).json({
     success: false,
     message,
@@ -115087,52 +115142,39 @@ var app_default = app;
 var server;
 async function bootstrap() {
   try {
-    await redis_config_default.connect();
-    logger_default.info("\u2705 Initialized Redis connection");
     await StorageService.init();
     if (!process.env.VERCEL) {
       server = app_default.listen(env.PORT || 5000, () => {
-        logger_default.info(`\uD83D\uDE80 [SERVER] Application is running on port ${env.PORT || 5000}`);
-        logger_default.info(`\uD83C\uDF0D Environment: ${env.NODE_ENV}`);
+        logger_default.info({ port: env.PORT || 5000, env: env.NODE_ENV }, "\uD83D\uDE80 [SERVER] Application running");
       });
     }
   } catch (err) {
-    logger_default.error(err instanceof Error ? err : { err }, "\u274C Failed to bootstrap the server");
+    logger_default.error({ err }, "\u274C Failed to bootstrap the server");
     process.exit(1);
   }
-  const exitHandler = () => {
-    if (server) {
-      server.close(() => {
-        logger_default.info("\u26A0\uFE0F Server closed");
-      });
-    }
-    process.exit(1);
-  };
-  const unexpectedErrorHandler = (error48) => {
-    logger_default.error(error48 instanceof Error ? error48 : { error: error48 }, "\uD83D\uDCA5 Unexpected Error");
-    exitHandler();
-  };
-  process.on("uncaughtException", unexpectedErrorHandler);
-  process.on("unhandledRejection", unexpectedErrorHandler);
-  process.on("SIGTERM", () => {
-    logger_default.info("\uD83D\uDED1 SIGTERM received");
-    if (server) {
-      server.close();
-    }
-  });
 }
+var exitHandler = () => {
+  if (server)
+    server.close(() => logger_default.info("\u26A0\uFE0F Server closed"));
+  process.exit(1);
+};
+process.on("uncaughtException", (err) => {
+  logger_default.error({ err }, "\uD83D\uDCA5 Uncaught Exception");
+  exitHandler();
+});
+process.on("unhandledRejection", (err) => {
+  logger_default.error({ err }, "\uD83D\uDCA5 Unhandled Rejection");
+  exitHandler();
+});
+process.on("SIGTERM", () => server?.close(() => logger_default.info("\uD83D\uDED1 SIGTERM received")));
 if (!process.env.VERCEL) {
   bootstrap();
 }
 app_default.use(async (_req, _res, next) => {
   try {
-    if (!redis_config_default.isOpen) {
-      await redis_config_default.connect();
-    }
     await StorageService.init();
     next();
   } catch (err) {
-    logger_default.error(err, "Failed to initialize connections in middleware");
     next(err);
   }
 });

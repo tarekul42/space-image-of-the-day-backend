@@ -11,5 +11,10 @@ router.get(
   ApodController.getApod,
 );
 router.get("/random", ApodController.getRandomApod);
+router.get(
+  "/range",
+  validateRequest(ApodValidation.getApodRangeSchema),
+  ApodController.getApodRange,
+);
 
 export const ApodRoutes = router;

@@ -126,7 +126,34 @@ const getRandomApod = async (
   throw new Error("Failed to find a random image APOD after several attempts");
 };
 
+const getApodRange = async (
+  start_date: string,
+  end_date: string,
+  lang: string = "en",
+): Promise<{ data: IApodData[]; source: "api" | "cache" }> => {
+  logger.info({ start_date, end_date }, "📅 Fetching APOD range from NASA");
+  const response = await axios.get<IApodData[]>(env.NASA_API_URL, {
+    params: { api_key: env.NASA_API_KEY, start_date, end_date },
+  });
+
+  const items = (Array.isArray(response.data) ? response.data : [response.data])
+    .filter((item) => item.media_type === "image");
+
+  const processed = await Promise.all(
+    items.map(async (item) => {
+      try {
+        return await processAndStoreApod(item, lang);
+      } catch {
+        return item;
+      }
+    }),
+  );
+
+  return { data: processed, source: "api" };
+};
+
 export const ApodService = {
   getApodByDate,
   getRandomApod,
+  getApodRange,
 };
