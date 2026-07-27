@@ -1,11 +1,29 @@
-.qodo
+# Dependencies
 node_modules/
+package-lock.json
+bun.lock
+
+# Build outputs
 dist/
 build/
-*.log
+
+# Environment
 .env
 .env.local
-.DS_Store
+
+# TypeScript
 *.tsbuildinfo
+
+# Testing
 coverage/
-package-lock.json
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+.qodo
+
+# OS
+.DS_Store
