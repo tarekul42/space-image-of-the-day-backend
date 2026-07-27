@@ -40,7 +40,8 @@ const processAndStoreApod = async (
         explanation: expRes.text,
       };
     } catch (err) {
-      logger.error({ err }, "Translation failed, falling back to English");
+      logger.warn({ err }, "Translation failed, falling back to English");
+      processedData.warning = "Translation unavailable; showing English";
     }
   }
 
@@ -62,8 +63,8 @@ const processAndStoreApod = async (
   };
 
   // Strip unnecessary NASA payload fields to optimize storage size
-  const { date, title, explanation, url, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url } = enrichedData;
-  const minimalData: IApodData = { date, title, explanation, url, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url };
+  const { date, title, explanation, url, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url, warning } = enrichedData;
+  const minimalData: IApodData = { date, title, explanation, url, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url, warning };
 
   await StorageService.set(cacheKey, minimalData);
 

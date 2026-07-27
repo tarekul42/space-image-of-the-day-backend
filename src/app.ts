@@ -7,6 +7,8 @@ import helmet from "helmet";
 import { z } from "zod";
 import { env } from "./app/config/env";
 import router from "./app/route/index";
+import redisClient from "./app/config/redis.config";
+import { getDb } from "./app/config/mongo.config";
 import logger from "./app/utils/logger";
 
 const app: Application = express();
@@ -86,11 +88,36 @@ app.get("/", (_req: Request, res: Response) => {
   });
 });
 
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
-    status: "UP",
+app.get("/health", async (_req: Request, res: Response) => {
+  const checks = {
+    redis: false,
+    mongo: false,
+  };
+
+  try {
+    const redisPing = await redisClient.ping();
+    checks.redis = redisPing === "PONG";
+  } catch {
+    checks.redis = false;
+  }
+
+  try {
+    const db = getDb();
+    if (db) {
+      await db.command({ ping: 1 });
+      checks.mongo = true;
+    }
+  } catch {
+    checks.mongo = false;
+  }
+
+  const allUp = checks.redis || (!env.REDIS_URL && checks.mongo);
+
+  res.status(allUp ? 200 : 503).json({
+    status: allUp ? "UP" : "DEGRADED",
     timestamp: new Date().toISOString(),
     service: "Space Image of the Day API",
+    checks,
   });
 });
 

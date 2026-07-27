@@ -114893,7 +114893,8 @@ var processAndStoreApod = async (data, lang = "en") => {
         explanation: expRes.text
       };
     } catch (err) {
-      logger_default.error({ err }, "Translation failed, falling back to English");
+      logger_default.warn({ err }, "Translation failed, falling back to English");
+      processedData.warning = "Translation unavailable; showing English";
     }
   }
   const exp = processedData.explanation.toLowerCase();
@@ -114904,8 +114905,8 @@ var processAndStoreApod = async (data, lang = "en") => {
     constellation: "Unknown Constellation",
     more_info_url: `${env.SIMBAD_BASE_URL}?Ident=${encodeURIComponent(processedData.title)}`
   };
-  const { date: date5, title, explanation, url: url3, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url } = enrichedData;
-  const minimalData = { date: date5, title, explanation, url: url3, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url };
+  const { date: date5, title, explanation, url: url3, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url, warning } = enrichedData;
+  const minimalData = { date: date5, title, explanation, url: url3, hdurl, media_type, service_version, copyright, object_type, constellation, more_info_url, warning };
   await StorageService.set(cacheKey, minimalData);
   return enrichedData;
 };
@@ -115109,11 +115110,32 @@ app.get("/", (_req, res) => {
     }
   });
 });
-app.get("/health", (_req, res) => {
-  res.json({
-    status: "UP",
+app.get("/health", async (_req, res) => {
+  const checks3 = {
+    redis: false,
+    mongo: false
+  };
+  try {
+    const redisPing = await redis_config_default.ping();
+    checks3.redis = redisPing === "PONG";
+  } catch {
+    checks3.redis = false;
+  }
+  try {
+    const db2 = getDb();
+    if (db2) {
+      await db2.command({ ping: 1 });
+      checks3.mongo = true;
+    }
+  } catch {
+    checks3.mongo = false;
+  }
+  const allUp = checks3.redis || !env.REDIS_URL && checks3.mongo;
+  res.status(allUp ? 200 : 503).json({
+    status: allUp ? "UP" : "DEGRADED",
     timestamp: new Date().toISOString(),
-    service: "Space Image of the Day API"
+    service: "Space Image of the Day API",
+    checks: checks3
   });
 });
 app.use((_req, res) => {

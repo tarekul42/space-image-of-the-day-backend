@@ -11,6 +11,7 @@ export interface IApodData {
   object_type?: string;
   constellation?: string;
   more_info_url?: string;
+  warning?: string;
 }
 
 export interface IApodResponse {
