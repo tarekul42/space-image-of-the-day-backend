@@ -17,6 +17,7 @@ const getApodRangeSchema = z.object({
     end_date: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, "End date must be in YYYY-MM-DD format"),
+    translate: z.string().optional(),
   }),
 });
 

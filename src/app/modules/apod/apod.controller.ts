@@ -48,11 +48,13 @@ const getApodRange = async (
   next: NextFunction,
 ) => {
   try {
-    const { start_date, end_date, lang } = req.query;
+    const { start_date, end_date, lang, translate } = req.query;
+    const shouldTranslate = translate !== "false" && translate !== "0";
     const result = await ApodService.getApodRange(
       start_date as string,
       end_date as string,
       lang as string,
+      shouldTranslate,
     );
     sendResponse(res, {
       statusCode: 200,
