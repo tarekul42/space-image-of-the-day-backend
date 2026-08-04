@@ -1,6 +1,7 @@
 import express from "express";
 import { ApodRoutes } from "../modules/apod/apod.route";
 import { CatalogRoutes } from "../modules/catalog/catalog.route";
+import { MetricsRoutes } from "../modules/metrics/metrics.route";
 
 const router = express.Router();
 
@@ -12,6 +13,10 @@ const moduleRoutes = [
   {
     path: "/catalog",
     route: CatalogRoutes,
+  },
+  {
+    path: "/metrics",
+    route: MetricsRoutes,
   },
 ];
 

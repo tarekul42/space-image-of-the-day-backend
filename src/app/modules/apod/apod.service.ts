@@ -90,6 +90,40 @@ const processAndStoreApod = async (
   return enrichedData;
 };
 
+const inFlightRequests = new Map<string, Promise<any>>();
+
+const singleFlight = <T>(key: string, fn: () => Promise<T>): Promise<T> => {
+  if (inFlightRequests.has(key)) {
+    logger.info({ key }, "⚡ Deduplicated concurrent request");
+    return inFlightRequests.get(key) as Promise<T>;
+  }
+  const promise = fn().finally(() => {
+    inFlightRequests.delete(key);
+  });
+  inFlightRequests.set(key, promise);
+  return promise;
+};
+
+const fetchWithBackoff = async <T>(requestFn: () => Promise<T>, retries = 3, initialDelay = 500): Promise<T> => {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await requestFn();
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const isRateLimit = status === 429;
+      const isServerError = status >= 500;
+      if ((isRateLimit || isServerError) && attempt < retries - 1) {
+        const waitTime = initialDelay * Math.pow(2, attempt);
+        logger.warn({ attempt: attempt + 1, waitTime, status }, "⚠️ NASA API rate-limit or error encountered, backing off...");
+        await new Promise((res) => setTimeout(res, waitTime));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw new Error("API call failed after max retries");
+};
+
 /**
  * Fetch Astronomical Picture of the Day.
  * Checks StorageService first (Redis -> MongoDB), then calls NASA API.
@@ -107,16 +141,20 @@ const getApodByDate = async (
     return { data: cachedData, source: "cache" };
   }
 
-  logger.info({ date: targetDate }, "🌐 Fetching APOD from NASA");
-  const response = await axios.get<IApodData>(env.NASA_API_URL, {
-    params: { api_key: env.NASA_API_KEY, date: targetDate },
-    timeout: 10_000,
-  });
+  return singleFlight(cacheKey, async () => {
+    logger.info({ date: targetDate }, "🌐 Fetching APOD from NASA");
+    const response = await fetchWithBackoff(() =>
+      axios.get<IApodData>(env.NASA_API_URL, {
+        params: { api_key: env.NASA_API_KEY, date: targetDate },
+        timeout: 10_000,
+      }),
+    );
 
-  return {
-    data: await processAndStoreApod(response.data, targetLang),
-    source: "api",
-  };
+    return {
+      data: await processAndStoreApod(response.data, targetLang),
+      source: "api",
+    };
+  });
 };
 
 const getRandomApod = async (
@@ -125,10 +163,12 @@ const getRandomApod = async (
   logger.info("🎲 Fetching random APOD from NASA");
 
   for (let i = 0; i < 3; i++) {
-    const response = await axios.get<IApodData | IApodData[]>(env.NASA_API_URL, {
-      params: { api_key: env.NASA_API_KEY, count: 5 },
-      timeout: 10_000,
-    });
+    const response = await fetchWithBackoff(() =>
+      axios.get<IApodData | IApodData[]>(env.NASA_API_URL, {
+        params: { api_key: env.NASA_API_KEY, count: 5 },
+        timeout: 10_000,
+      }),
+    );
 
     const imageItems = (Array.isArray(response.data) ? response.data : [response.data])
       .filter((item) => item.media_type === "image");
@@ -154,34 +194,39 @@ const getApodRange = async (
   lang: string = "en",
   shouldTranslate: boolean = true,
 ): Promise<{ data: IApodData[]; source: "api" | "cache" }> => {
-  logger.info({ start_date, end_date }, "📅 Fetching APOD range from NASA");
+  const flightKey = `range:${start_date}:${end_date}:${lang}:${shouldTranslate}`;
+  return singleFlight(flightKey, async () => {
+    logger.info({ start_date, end_date }, "📅 Fetching APOD range from NASA");
 
-  const items: IApodData[] = [];
-  for (const [windowStart, windowEnd] of chunkDateRange(start_date, end_date)) {
-    const response = await axios.get<IApodData[]>(env.NASA_API_URL, {
-      params: { api_key: env.NASA_API_KEY, start_date: windowStart, end_date: windowEnd },
-      timeout: 10_000,
-    });
-    const batch = (Array.isArray(response.data) ? response.data : [response.data]).filter(
-      (item) => item.media_type === "image",
+    const items: IApodData[] = [];
+    for (const [windowStart, windowEnd] of chunkDateRange(start_date, end_date)) {
+      const response = await fetchWithBackoff(() =>
+        axios.get<IApodData[]>(env.NASA_API_URL, {
+          params: { api_key: env.NASA_API_KEY, start_date: windowStart, end_date: windowEnd },
+          timeout: 10_000,
+        }),
+      );
+      const batch = (Array.isArray(response.data) ? response.data : [response.data]).filter(
+        (item) => item.media_type === "image",
+      );
+      items.push(...batch);
+    }
+
+    // Deduplicate by date (windows are adjacent, but stay safe).
+    const unique = [...new Map(items.map((item) => [item.date, item] as const)).values()];
+
+    const processed = await Promise.all(
+      unique.map(async (item) => {
+        try {
+          return await processAndStoreApod(item, lang, shouldTranslate);
+        } catch {
+          return item;
+        }
+      }),
     );
-    items.push(...batch);
-  }
 
-  // Deduplicate by date (windows are adjacent, but stay safe).
-  const unique = [...new Map(items.map((item) => [item.date, item] as const)).values()];
-
-  const processed = await Promise.all(
-    unique.map(async (item) => {
-      try {
-        return await processAndStoreApod(item, lang, shouldTranslate);
-      } catch {
-        return item;
-      }
-    }),
-  );
-
-  return { data: processed, source: "api" };
+    return { data: processed, source: "api" };
+  });
 };
 
 export const ApodService = {

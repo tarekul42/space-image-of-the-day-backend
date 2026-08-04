@@ -101,13 +101,16 @@ We don't just return NASA's raw text. Our service:
 
 ## 📡 API Endpoints
 
-| Method | Endpoint               | Description                                    |
-| :----- | :--------------------- | :--------------------------------------------- |
-| `GET`  | `/api/v1/apod`         | Today's APOD (Defaults to English).            |
-| `GET`  | `/api/v1/apod?lang=bn` | Today's APOD translated to Bengali.            |
-| `GET`  | `/api/v1/apod/random`  | Get a random cosmic image (Primed from cache). |
-| `GET`  | `/health`              | Service health status.                         |
-| `GET`  | `/metrics`             | Prometheus metrics for monitoring.             |
+| Method | Endpoint                    | Description                                    |
+| :----- | :-------------------------- | :--------------------------------------------- |
+| `GET`  | `/api/v1/apod`              | Today's APOD (Defaults to English).            |
+| `GET`  | `/api/v1/apod?lang=bn`      | Today's APOD translated to Bengali.            |
+| `GET`  | `/api/v1/apod/random`       | Get a random cosmic image (Primed from cache). |
+| `GET`  | `/api/v1/catalog/search`    | Ranked autocomplete search over cosmic objects.|
+| `GET`  | `/api/v1/metrics/summary`   | Real-time service status, memory & uptime stats.|
+| `GET`  | `/api/v1/metrics/prometheus`| Prometheus metrics export for monitoring.      |
+| `GET`  | `/health`                   | Service health status.                         |
+| `GET`  | `/metrics`                  | Prometheus metrics middleware endpoint.        |
 
 ---
 
